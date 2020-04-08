@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+###############################################################################
+#                                                                             #
+#    This program is free software: you can redistribute it and/or modify     #
+#    it under the terms of the GNU General Public License as published by     #
+#    the Free Software Foundation, either version 3 of the License, or        #
+#    (at your option) any later version.                                      #
+#                                                                             #
+#    This program is distributed in the hope that it will be useful,          #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of           #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #r
+#    GNU General Public License for more details.                             #
+#                                                                             #
+#    You should have received a copy of the GNU General Public License        #
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                             #
+###############################################################################
+
+__author__ = "Pierre Chaumeil"
+__copyright__ = "Copyright 2019"
+__credits__ = ["Donovan Parks", "Pierre Chaumeil", "Aaron Mussig"]
+__license__ = "GPL3"
+__maintainer__ = "Pierre Chaumeil"
+__email__ = "uqpchaum@uq.edu.au"
+__status__ = "Development"
+
+import os
+import sys
+import ntpath
+import logging
+import argparse
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+from src.main import OptionsParser
+
+from biolib.logger import logger_setup
+from biolib.misc.custom_help_formatter import CustomHelpFormatter
+from biolib.common import make_sure_path_exists
+
+
+def version():
+    """Read program version from file."""
+    import src
+    version_file = open(os.path.join(src.__path__[0], 'VERSION'))
+    return version_file.readline().strip()
+
+
+def print_help():
+    """Help menu."""
+
+    print('')
+    print('                ...::: Hatchet v' +
+          version() + ' :::...''')
+    print('''\
+
+    Workflow:
+    pick          -> Pick one genome for a specified rank
+    recreate_red  -> Regenerate RED values file for the new pruned tree.
+    split         -> Split Reference tree into lower ranks subtrees
+    red_low       -> Regenerate RED values file for the new low level trees.
+    
+
+
+  Use: hatchet <command> -h for command specific help.
+
+  Feature requests or bug reports can be sent to Pierre Chaumeil (uqpchaum@uq.edu.au)
+    or posted on GitHub (https://github.com/Ecogenomics/hatchet).
+    ''')
+
+
+if __name__ == '__main__':
+
+    # initialize the options parser
+    parser = argparse.ArgumentParser(add_help=False)
+    subparsers = parser.add_subparsers(help="--", dest='subparser_name')
+
+    # Pick genomes commands
+    pick_parser = subparsers.add_parser(
+        'pick', formatter_class=CustomHelpFormatter, description='Pick one genome for a specified rank.')
+    pick_parser.add_argument(
+        '--domain', required=True, help='Domain of interest', choices=['bac', 'arc'])
+    pick_parser.add_argument('-r', '--rank_of_interest',
+                             required=True, help='Rank of Interest.', choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
+    pick_parser.add_argument('--tree', required=True,
+                             help='newick tree to trim.')
+    pick_parser.add_argument('--msa', required=True, help='MSA to trim.')
+    pick_parser.add_argument('--taxonomy', required=True,
+                             help='GTDB-Tk Taxonomy file.')
+
+    pick_parser.add_argument('--output_dir', required=True,
+                             help='Output directory')
+    pick_parser.add_argument(
+        '--silent', help="suppress output", action='store_true')
+
+    red_parser = subparsers.add_parser(
+        'red', formatter_class=CustomHelpFormatter, description='Regenerate RED values for the new pruned tree.')
+
+    red_parser.add_argument('--raw_tree', required=True,
+                            help='Full tree used in pick step.')
+    red_parser.add_argument('--pruned_tree', required=True,
+                            help='Pruned tree')
+    red_parser.add_argument('--red_file', required=True,
+                            help='Original file listing the RED value for all genomes.')
+    red_parser.add_argument('--output', required=True,
+                            help='New RED file with genomes in pruned tree.')
+    red_parser.add_argument(
+        '--silent', help="suppress output", action='store_true')
+
+    split_parser = subparsers.add_parser(
+        'split', formatter_class=CustomHelpFormatter, description='Split Reference tree into lower ranks subtrees.')
+    split_parser.add_argument(
+        '--reference_tree', help='GTDB-Tk Reference Tree.', required=True)
+    split_parser.add_argument(
+        '--gtdb_taxonomy', help='GTDB-Tk Taxonomy file.', required=True)
+    split_parser.add_argument(
+        '--rank_to_split', choices=['d', 'p', 'c', 'o', 'f', 'g', 's'], required=True)
+    split_parser.add_argument(
+        '--msa_reference', help='MSA to trim.', required=True)
+    split_parser.add_argument(
+        '--domain', help='Domain of interest', choices=['bac', 'arc'], required=True)
+    split_parser.add_argument(
+        '--output_dir', help='Output directory', required=True)
+    split_parser.add_argument(
+        '--silent', help="suppress output", action='store_true')
+
+    red_low_parser = subparsers.add_parser(
+        'red_low', formatter_class=CustomHelpFormatter, description='Regenerate RED values file for the new low level trees.')
+
+    red_low_parser.add_argument('--split_trees_dir', required=True,
+                                help='Output directory from split function.')
+    red_low_parser.add_argument('--reference_tree', required=True,
+                                help='GTDB-Tk Reference Tree.')
+    red_low_parser.add_argument('--red_file', required=True,
+                                help='Original file listing the RED value for all genomes.')
+    red_low_parser.add_argument(
+        '--silent', help="suppress output", action='store_true')
+
+    # get and check options
+    args = None
+    if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv == '--help'):
+        print_help()
+        sys.exit(0)
+    else:
+        args = parser.parse_args()
+
+    try:
+        logger_setup(args.output_dir,
+                     'hatchet.log',
+                     'Hatchet',
+                     version(),
+                     args.silent)
+    except:
+        logger_setup(None,
+                     'hatchet.log',
+                     'Hatchet',
+                     version(),
+                     args.silent)
+
+    # do what we came here to do
+    try:
+        parser = OptionsParser()
+        if(False):
+            import cProfile
+            cProfile.run('parser.parse_options(args)', 'prof')
+        elif False:
+            import pdb
+            pdb.run(parser.parse_options(args))
+        else:
+            parser.parse_options(args)
+    except SystemExit:
+        print("\n  Controlled exit resulting from an unrecoverable error or warning.")
+    except:
+        print("\nUnexpected error:", sys.exc_info()[0])
+        raise

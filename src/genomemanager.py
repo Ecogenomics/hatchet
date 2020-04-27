@@ -136,6 +136,7 @@ class GenomeManager():
                                                   schema='newick',
                                                   rooting='force-rooted',
                                                   preserve_underscores=True)
+
         self._write_rd(pruned_tree, output, unpruned_tree)
 
     def regenerate_low_tree_red(self, split_tree_dir, raw_tree, red_file):

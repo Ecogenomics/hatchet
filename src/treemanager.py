@@ -215,7 +215,7 @@ class TreeManager():
         self.purge_reload('phylorank', shell_command_file, cmd4)
 
         shell_command_file.write(
-            "sed -r 's/\s+//g' {};".format(decorated_tree_file))
+            "sed -i -r 's/\s+//g' {};".format(decorated_tree_file))
 
         cmd5 = 'taxit create -l {0} -P {0} --aln-fasta {1} --tree-stats {2} --tree-file {3}'.format(
             package_name, aln_file, log_fitting_file, decorated_tree_file)

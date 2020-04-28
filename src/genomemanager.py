@@ -29,6 +29,7 @@ from collections import defaultdict
 from biolib.common import check_file_exists, make_sure_path_exists, check_dir_exists
 from biolib.seq_io import read_fasta
 
+from src.tools import purge_reload
 
 class GenomeManager():
     def __init__(self):
@@ -98,8 +99,29 @@ class GenomeManager():
                                                                             os.path.join(
                                                                                 output_dir, 'msa_file.fa'),
                                                                             os.path.join(output_dir, 'fitted_tree.tree'))
+
+
         sh_file.write(cmd + '\n')
-        # os.system(cmd)
+
+
+        decorated_tree = os.path.join(output_dir, 'decorated_tree.tree')
+        cmd4 = "phylorank decorate {} {} {} --skip_rd_refine".format(
+            os.path.join(output_dir, 'fitted_tree.tree'),
+            taxonomy_file, decorated_tree)
+        purge_reload('phylorank', sh_file, cmd4)
+
+        sh_file.write(
+            "sed -i -r 's/\s+//g' {};\n".format(decorated_tree))
+
+
+        # create pplacer package
+        sh_file.write('module purge\n')
+        sh_file.write('module load taxtastic/0.5.3\n')
+        cmd5 = 'taxit create -l {0} -P {0} --aln-fasta {1} --tree-stats {2} --tree-file {3}\n'.format(
+            os.path.join(output_dir,'gtdbtk_package_high_level'),
+            os.path.join(output_dir, 'msa_file.fa'),
+            os.path.join(output_dir, 'log_fitting.log'), decorated_tree)
+        sh_file.write(cmd5 + '\n')
 
     def regenerate_red_values(self, raw_tree, pruned_trees, red_file, output):
         unpruned_tree = dendropy.Tree.get_from_path(raw_tree,

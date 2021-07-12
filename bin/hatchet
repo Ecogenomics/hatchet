@@ -30,21 +30,18 @@ import ntpath
 import logging
 import argparse
 
+
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from src.main import OptionsParser
-
-from biolib.logger import logger_setup
-from biolib.misc.custom_help_formatter import CustomHelpFormatter
-from biolib.common import make_sure_path_exists
-
-
-def version():
-    """Read program version from file."""
-    import src
-    version_file = open(os.path.join(src.__path__[0], 'VERSION'))
-    return version_file.readline().strip()
+from hatchet.main import OptionsParser
+from hatchet import __version__
+from contextlib import contextmanager
+from datetime import datetime
+from hatchet.biolib_lite.logger import logger_setup
+from hatchet.biolib_lite.custom_help_formatter import CustomHelpFormatter
+from hatchet.biolib_lite.common import make_sure_path_exists
 
 
 def print_help():
@@ -52,7 +49,7 @@ def print_help():
 
     print('')
     print('                ...::: Hatchet v' +
-          version() + ' :::...''')
+          __version__ + ' :::...''')
     print('''\
 
     Workflow:
@@ -60,6 +57,8 @@ def print_help():
     recreate_red  -> Regenerate RED values file for the new pruned tree.
     split         -> Split Reference tree into lower ranks subtrees
     red_low       -> Regenerate RED values file for the new low level trees.
+    red_regenerate-> Similar to Phylorank outliers. use the RED values for the orders of the reference genomes
+                     then regenerate the new RED value under this.
     
 
 
@@ -69,108 +68,211 @@ def print_help():
     or posted on GitHub (https://github.com/Ecogenomics/hatchet).
     ''')
 
+@contextmanager
+def subparser(parser, name, desc):
+    yield parser.add_parser(name, conflict_handler='resolve', help=desc,
+                            formatter_class=CustomHelpFormatter)
 
-if __name__ == '__main__':
 
-    # initialize the options parser
-    parser = argparse.ArgumentParser(add_help=False)
-    subparsers = parser.add_subparsers(help="--", dest='subparser_name')
+@contextmanager
+def mutex_group(parser, required):
+    group = parser.add_argument_group(f'mutually exclusive '
+                                      f'{"required" if required else "optional"} '
+                                      f'arguments')
+    yield group.add_mutually_exclusive_group(required=required)
 
-    # Pick genomes commands
-    pick_parser = subparsers.add_parser(
-        'pick', formatter_class=CustomHelpFormatter, description='Pick one genome for a specified rank.')
-    pick_parser.add_argument(
-        '--domain', required=True, help='Domain of interest', choices=['bac', 'arc'])
-    pick_parser.add_argument('-r', '--rank_of_interest',
-                             required=True, help='Rank of Interest.', choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
-    pick_parser.add_argument('--tree', required=True,
-                             help='newick tree to trim.')
-    pick_parser.add_argument('--msa', required=True, help='MSA to trim.')
-    pick_parser.add_argument('--taxonomy', required=True,
-                             help='GTDB-Tk Taxonomy file.')
 
-    pick_parser.add_argument('--output_dir', required=True,
-                             help='Output directory')
-    pick_parser.add_argument(
-        '--silent', help="suppress output", action='store_true')
+@contextmanager
+def arg_group(parser, name):
+    yield parser.add_argument_group(name)
 
-    red_parser = subparsers.add_parser(
-        'red', formatter_class=CustomHelpFormatter, description='Regenerate RED values for the new pruned tree.')
 
-    red_parser.add_argument('--raw_tree', required=True,
-                            help='Full tree used in pick step.')
-    red_parser.add_argument('--pruned_tree', required=True,
-                            help='Pruned tree')
-    red_parser.add_argument('--red_file', required=True,
-                            help='Original file listing the RED value for all genomes.')
-    red_parser.add_argument('--output', required=True,
-                            help='New RED file with genomes in pruned tree.')
-    red_parser.add_argument(
-        '--silent', help="suppress output", action='store_true')
+def valid_date(s):
+    try:
+        return datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        msg = "Not a valid date: '{0}'.".format(s)
+        raise argparse.ArgumentTypeError(msg)
 
-    split_parser = subparsers.add_parser(
-        'split', formatter_class=CustomHelpFormatter, description='Split Reference tree into lower ranks subtrees.')
-    split_parser.add_argument(
-        '--reference_tree', help='GTDB-Tk Reference Tree.', required=True)
-    split_parser.add_argument(
-        '--gtdb_taxonomy', help='GTDB-Tk Taxonomy file.', required=True)
-    split_parser.add_argument(
-        '--rank_to_split', choices=['d', 'p', 'c', 'o', 'f', 'g', 's'], required=True)
-    split_parser.add_argument(
-        '--msa_reference', help='MSA to trim.', required=True)
-    split_parser.add_argument(
-        '--domain', help='Domain of interest', choices=['bac', 'arc'], required=True)
-    split_parser.add_argument(
-        '--output_dir', help='Output directory', required=True)
-    split_parser.add_argument(
-        '--silent', help="suppress output", action='store_true')
+def __domain(group, required):
+    group.add_argument('-d','--domain',
+                       help='Domain of interest',
+                       choices=['bac', 'arc'],
+                       required=required)
 
-    red_low_parser = subparsers.add_parser(
-        'red_low', formatter_class=CustomHelpFormatter, description='Regenerate RED values file for the new low level trees.')
+def __ref_tree(group, required):
+    group.add_argument('-t','--ref_tree',
+                       required=required,
+                       help='GTDB-Tk reference tree.')
 
-    red_low_parser.add_argument('--split_trees_dir', required=True,
-                                help='Output directory from split function.')
-    red_low_parser.add_argument('--reference_tree', required=True,
-                                help='GTDB-Tk Reference Tree.')
-    red_low_parser.add_argument('--red_file', required=True,
-                                help='Original file listing the RED value for all genomes.')
-    red_low_parser.add_argument(
-        '--silent', help="suppress output", action='store_true')
+def __ref_msa(group, required):
+    group.add_argument('-m','--msa',
+                       required=required,
+                       help='reference MSA file.')
 
+def __taxonomy_file(group, required):
+    group.add_argument('--tax','--taxonomy',
+                       required=required,
+                       help='Taxonomy file for the Newick tree to trim.')
+
+def __output_dir(group,required):
+    group.add_argument('-o','--out_dir',
+                       required=required,
+                       help='Output directory')
+
+def __rank_of_interest(group,required):
+    group.add_argument('-r', '--rank_of_interest',
+                       required=required,
+                       help='Rank of Interest.',
+                       choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
+def __rank_to_split(group,required):
+    group.add_argument('-r', '--rank_to_split',
+                       required=required,
+                       help='Split Reference tree into lower ranks subtrees.',
+                       choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
+
+def __silent(group):
+    group.add_argument('--silent', help="suppress output", action='store_true')
+
+def __pruned_tree(group,required):
+    group.add_argument('--pruned_tree',
+                       required=required,
+                        help='generated pruned tree')
+
+def __ref_red_file(group,required):
+    group.add_argument('--red_file',
+                       required=required,
+                        help='Original file listing the RED value for all genomes.')
+
+def __split_trees_dir(group,required):
+    group.add_argument('--split_trees_dir',
+                       required=required,
+                        help='Output directory from split function.')
+
+def __output_file(group, required):
+    group.add_argument('-o','--out_file', required=True,
+                            help='Output file.')
+
+def __input_log(group, required):
+    group.add_argument('-i','--input_log', required=True,
+                            help='Output file.')
+
+def __output_log(group, required):
+    group.add_argument('-o','--output_log', required=True,
+                            help='Output file.')
+
+
+def get_main_parser():
+    # Setup the main, and sub parsers.
+    main_parser = argparse.ArgumentParser(prog='hatchet', add_help=False, conflict_handler='resolve')
+    sub_parsers = main_parser.add_subparsers(help="--", dest='subparser_name')
+
+    # Clean FTP directory
+    with subparser(sub_parsers, 'pick', 'Pick one genome for a specified rank.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __domain(grp, required=True)
+            __rank_of_interest(grp,required=True)
+            __ref_tree(grp,required=True)
+            __ref_msa(grp,required=True)
+            __taxonomy_file(grp, required=True)
+            __output_dir(grp, required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+
+    with subparser(sub_parsers, 'red', 'Regenerate RED values for the new pruned tree based on the original red.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __ref_tree(grp, required=True)
+            __pruned_tree(grp, required=True)
+            __ref_red_file(grp, required=True)
+            __output_file(grp, required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+
+    with subparser(sub_parsers, 'split', 'Split Reference tree into lower ranks subtrees.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __ref_tree(grp, required=True)
+            __ref_msa(grp, required=True)
+            __taxonomy_file(grp, required=True)
+            __domain(grp, required=True)
+            __rank_to_split(grp, required=True)
+            __output_dir(grp, required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+
+    with subparser(sub_parsers, 'red_low', 'Regenerate RED values file for the new low level trees based on the original red.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __split_trees_dir(grp, required=True)
+            __ref_tree(grp, required=True)
+            __ref_red_file(grp,required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+
+    with subparser(sub_parsers, 'merge_logs', 'Replace last tree in Create a log fitting file by the original tree.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __input_log(grp, required=True)
+            __pruned_tree(grp, required=True)
+            __output_log(grp,required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+
+    return main_parser
+
+
+
+def main():
+    # -------------------------------------------------
     # get and check options
-    args = None
-    if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv == '--help'):
+    if len(sys.argv) == 1:
+        print_help()
+        sys.exit(0)
+    elif sys.argv[1] in {'-v', '--v', '-version', '--version'}:
+        print("hatchet: version %s %s %s" % (__version__,
+                                                       __copyright__,
+                                                       __author__))
+        sys.exit(0)
+    elif sys.argv[1] in {'-h', '--h', '-help', '--help'}:
         print_help()
         sys.exit(0)
     else:
-        args = parser.parse_args()
+        args = get_main_parser().parse_args()
 
-    try:
-        logger_setup(args.output_dir,
-                     'hatchet.log',
-                     'Hatchet',
-                     version(),
-                     args.silent)
-    except:
-        logger_setup(None,
-                     'hatchet.log',
-                     'Hatchet',
-                     version(),
-                     args.silent)
+        silent = False
+        if hasattr(args, 'silent'):
+            silent = args.silent
 
-    # do what we came here to do
-    try:
-        parser = OptionsParser()
-        if(False):
-            import cProfile
-            cProfile.run('parser.parse_options(args)', 'prof')
-        elif False:
-            import pdb
-            pdb.run(parser.parse_options(args))
-        else:
-            parser.parse_options(args)
-    except SystemExit:
-        print("\n  Controlled exit resulting from an unrecoverable error or warning.")
-    except:
-        print("\nUnexpected error:", sys.exc_info()[0])
-        raise
+        try:
+            make_sure_path_exists(args.output_dir)
+            logger_setup(os.path.dirname(args.output_dir),
+                         'hatchet.log',
+                         'Hatchet',
+                         __version__,
+                         silent)
+        except:
+            logger_setup('.',
+                         'hatchet.log',
+                         'Hatchet',
+                         __version__,
+                         silent)
+
+        # do what we came here to do
+        try:
+            parser = OptionsParser()
+            if False:
+                import cProfile
+
+                cProfile.run('parser.parse_options(args)', 'prof')
+            elif False:
+                import pdb
+
+                pdb.run(parser.parse_options(args))
+            else:
+                parser.parse_options(args)
+        except SystemExit:
+            print("\n  Controlled exit resulting from an unrecoverable error or warning.")
+        except:
+            print("\nUnexpected error:", sys.exc_info()[0])
+            raise
+
+
+if __name__ == '__main__':
+    main()

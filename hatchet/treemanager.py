@@ -16,6 +16,7 @@
 ###############################################################################
 
 import os
+import subprocess
 import sys
 import csv
 import re
@@ -28,6 +29,7 @@ from collections import defaultdict
 
 from hatchet.biolib_lite.common import make_sure_path_exists
 from hatchet.biolib_lite.seq_io import read_fasta
+from hatchet.tools import merge_logs
 
 
 class TreeManager():
@@ -106,29 +108,8 @@ class TreeManager():
         return list_gids, list_ranks, largest_clade_index
 
     def split_tree(self, outdir):
-        shell_command_file = open(os.path.join(
-            outdir, 'tree_creation_commands.sh'), 'w')
         # shell_command_file.write('#!/usr/bin/env bash\n')
 
-        shell_command_file.write("""
-
-alias hatchet='/srv/home/uqpchaum/development/hatchet/bin/hatchet'
-        
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/opt/centos7/sw/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/opt/centos7/sw/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/opt/centos7/sw/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/opt/centos7/sw/miniconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-# <<< conda initialize <<<
-\n""")
 
 
         #list_order_file = open(os.path.join(outdir, 'tree_mapping.tsv'), 'w')
@@ -156,6 +137,8 @@ unset __conda_setup
                     if nd.label is not None and self.rank + '__' in nd.label:
                         dict_nodes[nd] = len(nd.leaf_nodes())
 
+            print(dict_nodes)
+
             largest_node = max(dict_nodes.items(),
                                key=operator.itemgetter(1))[0]
 
@@ -173,7 +156,7 @@ unset __conda_setup
 
             # Add clade_index
             self.process_tree(processed_nodes,
-                              tree_index, outdir, shell_command_file, mapping_file)
+                              tree_index, outdir, mapping_file)
             tree_index += 1
 
             tree = tree.extract_tree(
@@ -185,9 +168,8 @@ unset __conda_setup
         print("size of last tree:{}\n".format(len(tree.leaf_nodes())))
 
         self.process_tree(processed_nodes,
-                          tree_index, outdir, shell_command_file, mapping_file)
+                          tree_index, outdir, mapping_file)
 
-        shell_command_file.close()
 
     def select_remaining_phylum(self, set_phylum_in_tree):
         results = {}
@@ -199,7 +181,7 @@ unset __conda_setup
         self.logger.info(f'Remaining Phylum = {len(results)}, Phylum in Tree {len(set_phylum_in_tree)} {set_phylum_in_tree}')
         return results
 
-    def process_tree(self, processed_nodes, clade_index, outdir, shell_command_file, mapping_file):
+    def process_tree(self, processed_nodes, clade_index, outdir, mapping_file):
 
         list_genomes = [
             nd.taxon.label for nd in processed_nodes if nd.is_leaf()]
@@ -260,54 +242,64 @@ unset __conda_setup
             for df in diff_keys:
                 self.logger.error(f"{df}\t{self.taxonomy_dict.get(df)}")
 
-        package_name = 'gtdbtk.package.{}.refpkg'.format(clade_index)
-        aln_file = '{}_msa.fa'.format(clade_index)
-        tree_file = '{}_reference.tree'.format(clade_index)
-        tree1.write_to_path(os.path.join(outdir, tree_file),
+        package_name = os.path.join(outdir,'gtdbtk.package.{}.refpkg'.format(clade_index))
+        aln_file = os.path.join(outdir,'{}_msa.fa'.format(clade_index))
+        tree_file = os.path.join(outdir,'{}_reference.tree'.format(clade_index))
+        tree1.write_to_path(tree_file,
                             schema='newick',
                             suppress_rooting=True,
                             unquoted_underscores=True)
 
-        fitted_tree_file = '{}_reference.fitted.tree'.format(clade_index)
-        rooted_tree_file = '{}_reference.rooted.tree'.format(clade_index)
-        stripped_tree_file = '{}_reference.stripped.tree'.format(clade_index)
-        decorated_tree_file = '{}_reference.decorated.tree'.format(clade_index)
+        fitted_tree_file = os.path.join(outdir,'{}_reference.fitted.tree'.format(clade_index))
+        rooted_tree_file = os.path.join(outdir,'{}_reference.rooted.tree'.format(clade_index))
+        stripped_tree_file = os.path.join(outdir,'{}_reference.stripped.tree'.format(clade_index))
+        decorated_tree_file = os.path.join(outdir,'{}_reference.decorated.tree'.format(clade_index))
 
-        log_fitting_file = 'log_fitting.{}.log'.format(clade_index)
-        log_fitting_merged_file = 'log_fitting_merged.{}.log'.format(clade_index)
+        log_fitting_file = os.path.join(outdir,'log_fitting.{}.log'.format(clade_index))
+        log_fitting_merged_file = os.path.join(outdir,'log_fitting_merged.{}.log'.format(clade_index))
 
         # shell_command_file.write('#!/usr/bin/env bash;')
 
         cmd1 = "genometreetk strip {} {}".format(
             tree_file, stripped_tree_file)
-        self.purge_reload(
-                          shell_command_file, cmd1,'conda activate genometreetk-0.1.6;')
 
-        cmd2 = "FastTreeMP -wag -nome -mllen -intree {} -log {} < {} > {}".format(
-            stripped_tree_file, log_fitting_file, aln_file, fitted_tree_file)
-        self.purge_reload(shell_command_file, cmd2)
+        subprocess.run(["genometreetk", "strip", tree_file, stripped_tree_file])
 
 
+        with open(aln_file, 'rb', 0) as in_stream, open(fitted_tree_file, 'wb', 0) as out_stream:
+            proc = subprocess.Popen(
+                ["FastTreeMP", "-nome", "-mllen", "-intree", stripped_tree_file, '-log',log_fitting_file], stdin=in_stream, stdout=out_stream)
+            print("the commandline is {}".format(proc.args))
+            proc.communicate()
 
-        cmd_hatchet = f"hatchet merge_logs -i {log_fitting_file} --pruned_tree {stripped_tree_file} -o {log_fitting_merged_file}"
-        self.purge_reload(shell_command_file, cmd_hatchet,'conda deactivate;conda activate gtdbtk-dev;')
+        merge_logs(log_fitting_file,
+                   stripped_tree_file,
+                   log_fitting_merged_file)
 
-        cmd3 = "genometreetk outgroup {} {} '{}' {}".format(
-            stripped_tree_file, self.taxonomy, species_out, rooted_tree_file)
-        self.purge_reload(shell_command_file, cmd3,'conda deactivate;conda activate genometreetk-0.1.6;')
+        subprocess.run(["genometreetk","outgroup",stripped_tree_file,
+                        self.taxonomy,species_out,rooted_tree_file])
 
-        cmd4 = "phylorank decorate {} {} {} --skip_rd_refine".format(
-            rooted_tree_file, self.taxonomy, decorated_tree_file)
-        self.purge_reload(shell_command_file, cmd4,'conda activate phylorank-0.1.9;')
+        subprocess.run(["phylorank","decorate",rooted_tree_file,
+                        self.taxonomy,decorated_tree_file,"--skip_rd_refine"])
 
-        shell_command_file.write(
-            "sed -i -r 's/\s+//g' {};".format(decorated_tree_file))
+        # first get all lines from file
+        with open(decorated_tree_file, 'r') as f:
+            lines = f.readlines()
 
-        cmd5 = 'taxit create -l {0} -P {0} --aln-fasta {1} --tree-stats {2} --tree-file {3}'.format(
-            package_name, aln_file, log_fitting_merged_file, decorated_tree_file)
-        self.purge_reload(shell_command_file, cmd5,'conda activate taxtastic-0.9.0;')
+        # remove spaces
+        lines = [line.replace(' ', '') for line in lines]
 
-        shell_command_file.write('\n')
+        # finally, write lines in the file
+        with open(decorated_tree_file, 'w') as f:
+            f.writelines(lines)
+
+
+        # create pplacer package
+        subprocess.run(["taxit","create","-l",package_name,
+                       "-P",package_name,
+                        "--aln-fasta",aln_file,
+                        "--tree-stats",log_fitting_merged_file,
+                        "--tree-file",decorated_tree_file])
 
         # sys.exit()
 

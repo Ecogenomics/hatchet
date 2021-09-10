@@ -14,8 +14,7 @@
 #    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
 #                                                                             #
 ###############################################################################
-
-
+import os
 import sys
 import logging
 
@@ -58,6 +57,32 @@ class OptionsParser():
     def merge_logs(self, options):
         merge_logs(options.input_log,options.pruned_tree,options.output_log)
 
+    def hatchet_wf(self,options):
+        make_sure_path_exists(options.out_dir)
+        high_level_directory = os.path.join(options.out_dir,'high_level')
+        make_sure_path_exists(high_level_directory)
+        g = GenomeManager()
+        self.logger.info('High level genome picking....')
+        g.pick_one_genome(options.ref_tree, options.msa, options.tax,
+                          options.domain, options.rank_of_interest, high_level_directory)
+
+
+        pruned_tree = os.path.join(high_level_directory, "gtdb_pruned.tree")
+        high_red_value_file = os.path.join(high_level_directory,'high_red_value.tsv')
+
+        self.logger.info('....')
+        g.regenerate_red_values(
+            options.ref_tree, pruned_tree, options.red_file, high_red_value_file)
+
+        spe_level_directory = os.path.join(options.out_dir,'species_level')
+
+        t = TreeManager(options.ref_tree, options.tax,
+                        options.rank_to_split, options.msa, options.domain)
+        make_sure_path_exists(spe_level_directory)
+        t.split_tree(spe_level_directory)
+
+        g.regenerate_low_tree_red(spe_level_directory, options.ref_tree, options.red_file)
+
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)"""
         if options.subparser_name == 'pick':
@@ -70,6 +95,8 @@ class OptionsParser():
             self.regenerate_low_tree_red(options)
         elif options.subparser_name == 'merge_logs':
             self.merge_logs(options)
+        elif options.subparser_name == 'hatchet_wf':
+            self.hatchet_wf(options)
         else:
             self.logger.error('Unknown command: ' +
                               options.subparser_name + '\n')

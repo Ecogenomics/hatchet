@@ -18,15 +18,22 @@
 import os
 import logging
 import random
+import sys
+
 import dendropy
+import subprocess
+
 
 from hatchet.biolib_lite.seq_io import read_fasta
+from hatchet.tools import merge_logs, prune
 
 
 class GenomeManager():
     def __init__(self):
         """Initialization"""
         self.order_ranks = ['d', 'p', 'c', 'o', 'f', 'g', 's']
+        self.ranks_dict = {'d':'domain', 'p':'phylum', 'c':'class', 'o':'order',
+                            'f':'family', 'g':'genus', 's':'species'}
         self.logger = logging.getLogger('timestamp')
 
     def parse_taxonomy_file(self, tf, domain, roi):
@@ -41,7 +48,17 @@ class GenomeManager():
 
         return results
 
+    def execute(self,cmd):
+        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+        for stdout_line in iter(popen.stdout.readline, ""):
+            yield stdout_line
+        popen.stdout.close()
+        return_code = popen.wait()
+        if return_code:
+            raise subprocess.CalledProcessError(return_code, cmd)
+
     def pick_one_genome(self, tree, msa, taxonomy_file, domain, rank_of_interest, output_dir):
+        self.logger.info(f"Picking one genome per {self.ranks_dict.get(rank_of_interest)}")
         selected_genomes = []
         dom_dict = {}
 
@@ -69,74 +86,50 @@ class GenomeManager():
         # Because module calls are not working properly in Python we generate a
         # sh script to run after
 
-        # We pruned the tree
-        sh_file = open(os.path.join(output_dir, 'pick_one_genome.sh'), 'w')
-        sh_file.write("""
-        # >>> conda initialize >>>
-        # !! Contents within this block are managed by 'conda init' !!
-        __conda_setup="$('/opt/centos7/sw/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
-        if [ $? -eq 0 ]; then
-            eval "$__conda_setup"
-        else
-            if [ -f "/opt/centos7/sw/miniconda3/etc/profile.d/conda.sh" ]; then
-                . "/opt/centos7/sw/miniconda3/etc/profile.d/conda.sh"
-            else
-                export PATH="/opt/centos7/sw/miniconda3/bin:$PATH"
-            fi
-        fi
-        unset __conda_setup
-        # <<< conda initialize <<<
-        \n""")
-        cmd = 'genometreetk strip {} {}'.format(
-            tree, os.path.join(output_dir, 'gtdb_stripped.tree'))
+        subprocess.run(["genometreetk", "strip",tree,os.path.join(output_dir, 'gtdb_stripped.tree')])
 
-        sh_file.write('conda activate genometreetk-0.1.6;')
-        sh_file.write(cmd + '\n')
+        # subprocess.run(["genetreetk", "prune", "--tree", os.path.join(output_dir, 'gtdb_stripped.tree'),
+        #                 "-t", os.path.join(output_dir, 'selected_genomes.lst'),
+        #                 "--output",os.path.join(output_dir, 'gtdb_pruned.tree')])
 
-        cmd = 'genetreetk prune --tree {} -t {} --output {}'.format(os.path.join(output_dir, 'gtdb_stripped.tree'),
-                                                                    os.path.join(
-                                                                        output_dir, 'selected_genomes.lst'),
-                                                                    os.path.join(output_dir, 'gtdb_pruned.tree'))
+        prune(self.logger,os.path.join(output_dir, 'gtdb_stripped.tree'),
+              os.path.join(output_dir, 'selected_genomes.lst'),
+              os.path.join(output_dir, 'gtdb_pruned.tree'))
 
-        sh_file.write('conda activate genetreetk-0.0.15;')
-        sh_file.write(cmd + '\n')
-
-        cmd = 'FastTreeMP -nome -mllen -intree {} -log {} < {} > {}'.format(os.path.join(output_dir, 'gtdb_pruned.tree'),
-                                                                            os.path.join(
-                                                                                output_dir, 'log_fitting.log'),
-                                                                            os.path.join(
-                                                                                output_dir, 'msa_file.fa'),
-                                                                            os.path.join(output_dir, 'fitted_tree.tree'))
+        with open(os.path.join(output_dir, 'msa_file.fa'), 'rb', 0) as in_stream, open(os.path.join(output_dir, 'fitted_tree.tree'), 'wb', 0) as out_stream:
+            proc = subprocess.Popen(
+                ["FastTreeMP", "-nome", "-mllen", "-intree", os.path.join(output_dir, 'gtdb_pruned.tree'), '-log',
+                 os.path.join(output_dir, 'log_fitting.log')], stdin=in_stream, stdout=out_stream)
+            print("the commandline is {}".format(proc.args))
+            proc.communicate()
 
 
-        sh_file.write(cmd + '\n')
+        merge_logs(os.path.join(output_dir, 'log_fitting.log'),
+                   os.path.join(output_dir, "gtdb_pruned.tree"),
+                   os.path.join(output_dir, "log_fitting_merged.log"))
 
-        cmd_hatchet = f'hatchet merge_logs -i {os.path.join(output_dir, "log_fitting.log")} ' \
-                      f'--pruned_tree {os.path.join(output_dir, "gtdb_pruned.tree")}' \
-                      f' -o {os.path.join(output_dir, "log_fitting_merged.log")}'
-        sh_file.write('conda deactivate;conda activate gtdbtk-dev;\n')
-        sh_file.write(cmd_hatchet + '\n')
 
         decorated_tree = os.path.join(output_dir, 'decorated_tree.tree')
-        cmd4 = "phylorank decorate {} {} {} --skip_rd_refine".format(
-            os.path.join(output_dir, 'gtdb_pruned.tree'),
-            taxonomy_file, decorated_tree)
-        sh_file.write('conda activate phylorank-0.1.9;')
-        sh_file.write(cmd4 + '\n')
+        subprocess.run(["phylorank", "decorate", os.path.join(output_dir, 'gtdb_pruned.tree'),
+                        taxonomy_file,decorated_tree,"--skip_rd_refine"])
 
-        sh_file.write(
-            "sed -i -r 's/\s+//g' {};\n".format(decorated_tree))
+        # first get all lines from file
+        with open(decorated_tree, 'r') as f:
+            lines = f.readlines()
 
+        # remove spaces
+        lines = [line.replace(' ', '') for line in lines]
+
+        # finally, write lines in the file
+        with open(decorated_tree, 'w') as f:
+            f.writelines(lines)
 
         # create pplacer package
-        #sh_file.write('module purge\n')
-        #sh_file.write('module load taxtastic/0.5.3\n')
-        sh_file.write('conda activate taxtastic-0.9.0\n')
-        cmd5 = 'taxit create -l {0} -P {0} --aln-fasta {1} --tree-stats {2} --tree-file {3}\n'.format(
-            os.path.join(output_dir,'gtdbtk_package_high_level'),
-            os.path.join(output_dir, 'msa_file.fa'),
-            os.path.join(output_dir, 'log_fitting_merged.log'), decorated_tree)
-        sh_file.write(cmd5 + '\n')
+        subprocess.run(["taxit","create","-l",os.path.join(output_dir,'gtdbtk_package_high_level'),
+                       "-P",os.path.join(output_dir,'gtdbtk_package_high_level'),
+                        "--aln-fasta",os.path.join(output_dir, 'msa_file.fa'),
+                        "--tree-stats",os.path.join(output_dir, 'log_fitting_merged.log'),
+                        "--tree-file",decorated_tree])
 
     def regenerate_red_values(self, raw_tree, pruned_trees, red_file, output):
         unpruned_tree = dendropy.Tree.get_from_path(raw_tree,
@@ -168,7 +161,6 @@ class GenomeManager():
                         node = leaf_node_map[labels[0]]
                         node.rel_dist = float(red_value)
                         reference_nodes.add(node)
-        print(pruned_trees)
         pruned_tree = dendropy.Tree.get_from_path(pruned_trees,
                                                   schema='newick',
                                                   rooting='force-rooted',

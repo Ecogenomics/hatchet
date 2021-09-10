@@ -57,8 +57,10 @@ def print_help():
     recreate_red  -> Regenerate RED values file for the new pruned tree.
     split         -> Split Reference tree into lower ranks subtrees
     red_low       -> Regenerate RED values file for the new low level trees.
-    red_regenerate-> Similar to Phylorank outliers. use the RED values for the orders of the reference genomes
-                     then regenerate the new RED value under this.
+    merge_logs    -> Merge log files. Replace last tree in log fitting with the original tree. This new log fitting
+                     is used in pplacer package
+    
+    hatchet_wf    -> pick -> recreate_red -> split -> red_low
     
 
 
@@ -124,10 +126,12 @@ def __rank_of_interest(group,required):
     group.add_argument('-r', '--rank_of_interest',
                        required=required,
                        help='Rank of Interest.',
+                       default='f',
                        choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
 def __rank_to_split(group,required):
     group.add_argument('-r', '--rank_to_split',
                        required=required,
+                       default='o',
                        help='Split Reference tree into lower ranks subtrees.',
                        choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
 
@@ -214,6 +218,19 @@ def get_main_parser():
             __output_log(grp,required=True)
         with arg_group(parser, 'options arguments') as grp:
             __silent(grp)
+
+    with subparser(sub_parsers, 'hatchet_wf', 'Run the full workflow , from pick to red_low.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __domain(grp, required=True)
+            __ref_tree(grp,required=True)
+            __ref_msa(grp,required=True)
+            __taxonomy_file(grp, required=True)
+            __output_dir(grp, required=True)
+            __ref_red_file(grp, required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+            __rank_of_interest(grp,required=False)
+            __rank_to_split(grp, required=False)
 
     return main_parser
 

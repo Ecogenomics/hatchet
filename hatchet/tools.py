@@ -1,3 +1,5 @@
+import subprocess
+
 import dendropy
 
 from hatchet.biolib_lite.common import check_file_exists
@@ -32,6 +34,25 @@ def merge_logs(log_fitting_in,non_fitted_tree,log_fitting_out):
                     output_file.write(line)
             else:
                 output_file.write(line)
+
+def remove_character(decorated_tree,char):
+    # first get all lines from file
+    with open(decorated_tree, 'r') as f:
+        lines = f.readlines()
+    # remove character
+    lines = [line.replace(char, '') for line in lines]
+    # finally, write lines in the file
+    with open(decorated_tree, 'w') as f:
+        f.writelines(lines)
+
+def execute(cmd):
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+    for stdout_line in iter(popen.stdout.readline, ""):
+        yield stdout_line
+    popen.stdout.close()
+    return_code = popen.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
 
 def prune(selflogger,input_tree, taxa_to_retain_file, output_tree):
     """Prune tree.

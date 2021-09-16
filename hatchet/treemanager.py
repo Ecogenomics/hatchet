@@ -25,11 +25,11 @@ import random
 import dendropy
 import operator
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from hatchet.biolib_lite.common import make_sure_path_exists
 from hatchet.biolib_lite.seq_io import read_fasta
-from hatchet.tools import merge_logs
+from hatchet.tools import merge_logs, remove_character
 
 
 class TreeManager():
@@ -47,14 +47,21 @@ class TreeManager():
         self.rank_order = ['d', 'p', 'c', 'o', 'f', 'g', 's']
         # we will need to select one genome from each subrank so we pick the
         # index of the subrank
-        self.rank_order_index = self.rank_order.index(rank) + 1
+        self.rank_order_index = self.rank_order.index(rank)
+        self.rank_family_index = self.rank_order.index(rank) + 1
+
+
         self.domain = 'd__Bacteria'
         if domain == 'arc':
             self.domain = 'd__Archaea'
-        self.gid_per_rank = self.get_gid_per_rank(
-            taxonomy, self.rank_order_index)
 
     def populate_phylum_dict(self):
+        """
+            Generates a dictionary listing all representatives genomes (values) per phylum (key)
+
+        @return: dict
+            dictionary listing all representatives genomes (values) per phylum (key)
+        """
         results = {}
 
         temp_tree = dendropy.Tree.get_from_path(self.tree,
@@ -86,7 +93,16 @@ class TreeManager():
         return results
 
     def calculate_maximum_tree_size(self):
+        """
+            Count how many orders are in the tree
+            This number represent the size of the order level tree , i.e. backbone tree
+
+
+        @return: int
+            Return the size of the backbone tree
+        """
         rank_list = []
+        order_list = []
         with open(self.taxonomy) as taxf:
             for line in taxf:
                 genome, taxonomy = line.strip().split('\t')
@@ -94,8 +110,15 @@ class TreeManager():
 
                 ranks = taxonomy.split(';')
                 if ranks[0] == self.domain:
-                    rank_list.append(ranks[self.rank_order_index])
-        return len(set(rank_list))
+                    rank_list.append(ranks[self.rank_family_index])
+                    order_list.append(ranks[self.rank_order_index])
+
+        most_common_order,len_order = Counter(order_list).most_common(1)[0]
+
+
+        print(most_common_order, len_order)
+
+        return max(len(set(rank_list)),len_order)
 
     def combine_clades(self, largest_clade_leaves, ordered_largest_clade, largest_clade_index, rank_dict_gid):
         list_gids = []
@@ -108,11 +131,6 @@ class TreeManager():
         return list_gids, list_ranks, largest_clade_index
 
     def split_tree(self, outdir):
-        # shell_command_file.write('#!/usr/bin/env bash\n')
-
-
-
-        #list_order_file = open(os.path.join(outdir, 'tree_mapping.tsv'), 'w')
 
         make_sure_path_exists(outdir)
         mapping_file = open(os.path.join(outdir, 'tree_mapping.tsv'), 'w')
@@ -122,9 +140,6 @@ class TreeManager():
                                            schema='newick',
                                            rooting='force-rooted',
                                            preserve_underscores=True)
-
-        # self.prepare_tree(self.tree, self.msa_file,
-        #                  self.gid_per_rank, outdir, shell_command_file)
 
         processed_nodes = []
         tree_index = 1
@@ -137,7 +152,6 @@ class TreeManager():
                     if nd.label is not None and self.rank + '__' in nd.label:
                         dict_nodes[nd] = len(nd.leaf_nodes())
 
-            print(dict_nodes)
 
             largest_node = max(dict_nodes.items(),
                                key=operator.itemgetter(1))[0]
@@ -234,6 +248,10 @@ class TreeManager():
 
 
         self.logger.info(f'Number of seq in MSA: {count_msa} / Number of leaves in Tree : {nber_of_leaves}')
+        self.logger.info(f'This number represents the number of genomes in the order(s) of interest '
+                         f'({len(list_genomes)} genomes and one genome per phylum not classifiying '
+                         f'order of interest ({len(external_phylum_genomes)} genomes).')
+
         if count_msa != nber_of_leaves:
             self.logger.error("There is a difference between the number of leaves and numbers of sequences in MSA")
             keys1 = taxonomy_msa.keys()
@@ -241,6 +259,7 @@ class TreeManager():
             diff_keys = keys1-keys2
             for df in diff_keys:
                 self.logger.error(f"{df}\t{self.taxonomy_dict.get(df)}")
+            sys.exit(-1)
 
         package_name = os.path.join(outdir,'gtdbtk.package.{}.refpkg'.format(clade_index))
         aln_file = os.path.join(outdir,'{}_msa.fa'.format(clade_index))
@@ -258,20 +277,22 @@ class TreeManager():
         log_fitting_file = os.path.join(outdir,'log_fitting.{}.log'.format(clade_index))
         log_fitting_merged_file = os.path.join(outdir,'log_fitting_merged.{}.log'.format(clade_index))
 
-        # shell_command_file.write('#!/usr/bin/env bash;')
 
-        cmd1 = "genometreetk strip {} {}".format(
-            tree_file, stripped_tree_file)
-
+        # We strip the taxonomy from the tree
         subprocess.run(["genometreetk", "strip", tree_file, stripped_tree_file])
 
 
+        # a log file is created to matches the new MSA and pruned tree
+        # This log file is requiered for pplacer
         with open(aln_file, 'rb', 0) as in_stream, open(fitted_tree_file, 'wb', 0) as out_stream:
             proc = subprocess.Popen(
                 ["FastTreeMP", "-nome", "-mllen", "-intree", stripped_tree_file, '-log',log_fitting_file], stdin=in_stream, stdout=out_stream)
             print("the commandline is {}".format(proc.args))
             proc.communicate()
 
+        # This is a step when we modify the log fitting file from pplacer
+        # We want to keep all information from the log but we do not want to rescale the branches
+        # So the idea is to replace the latest iteration from the fitting step with the original tree
         merge_logs(log_fitting_file,
                    stripped_tree_file,
                    log_fitting_merged_file)
@@ -279,19 +300,13 @@ class TreeManager():
         subprocess.run(["genometreetk","outgroup",stripped_tree_file,
                         self.taxonomy,species_out,rooted_tree_file])
 
+
+        # we redecorate the tree
+        # because the topology stays the same there should not be any polyphyletic groups
         subprocess.run(["phylorank","decorate",rooted_tree_file,
                         self.taxonomy,decorated_tree_file,"--skip_rd_refine"])
 
-        # first get all lines from file
-        with open(decorated_tree_file, 'r') as f:
-            lines = f.readlines()
-
-        # remove spaces
-        lines = [line.replace(' ', '') for line in lines]
-
-        # finally, write lines in the file
-        with open(decorated_tree_file, 'w') as f:
-            f.writelines(lines)
+        remove_character(decorated_tree_file,' ')
 
 
         # create pplacer package
@@ -301,7 +316,6 @@ class TreeManager():
                         "--tree-stats",log_fitting_merged_file,
                         "--tree-file",decorated_tree_file])
 
-        # sys.exit()
 
     def purge_reload(self, shell_command_file, cmd,conda_activate = None):
         if conda_activate is not None:

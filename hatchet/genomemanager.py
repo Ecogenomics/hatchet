@@ -25,7 +25,7 @@ import subprocess
 
 
 from hatchet.biolib_lite.seq_io import read_fasta
-from hatchet.tools import merge_logs, prune
+from hatchet.tools import merge_logs, prune, remove_character
 
 
 class GenomeManager():
@@ -37,30 +37,48 @@ class GenomeManager():
         self.logger = logging.getLogger('timestamp')
 
     def parse_taxonomy_file(self, tf, domain, roi):
+        """ Parses the taxonomy file
+
+        @param tf: str
+            path to the taxonomy file
+        @param domain: str
+            d__Bacteria or d__Archaea
+        @param roi: str
+            Rank of interest in ['d', 'p', 'c', 'o', 'f', 'g', 's']
+
+        @return: dict[str,[str]]
+            Dictionary listing all genomes (values) associated with a rank of interest (key)
+        """
         results = {}
         with open(tf) as filein:
             for line in filein:
                 infos = line.strip().split('\t')
-                picked_rank = infos[1].split(';')[self.order_ranks.index(roi)]
-                str_domain = infos[1].split(';')[0]
+                taxonomy_str=infos[1].split(';')
+                picked_rank = taxonomy_str[self.order_ranks.index(roi)]
+                str_domain = taxonomy_str[0]
                 if str_domain == domain:
                     results.setdefault(picked_rank, []).append(infos[0])
 
         return results
 
-    def execute(self,cmd):
-        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
-        for stdout_line in iter(popen.stdout.readline, ""):
-            yield stdout_line
-        popen.stdout.close()
-        return_code = popen.wait()
-        if return_code:
-            raise subprocess.CalledProcessError(return_code, cmd)
-
     def pick_one_genome(self, tree, msa, taxonomy_file, domain, rank_of_interest, output_dir):
+        """
+
+        @param tree: str
+            Path GTDB reference tree
+        @param msa: str
+            Path GTDB reference MSA
+        @param taxonomy_file: str
+            Path GTDB Taxonomy file
+        @param domain: str
+            Path GTDB domain of interest
+        @param rank_of_interest: str
+            rank of interest, Hatchet will pick one genome per taxa for each of this rank
+        @param output_dir: str
+            Path to output directory
+        """
         self.logger.info(f"Picking one genome per {self.ranks_dict.get(rank_of_interest)}")
         selected_genomes = []
-        dom_dict = {}
 
         if domain == 'bac':
             dom_dict = self.parse_taxonomy_file(
@@ -69,13 +87,14 @@ class GenomeManager():
             dom_dict = self.parse_taxonomy_file(
                 taxonomy_file, 'd__Archaea', rank_of_interest)
 
+
+        # We pick randomly one genome per family
         for k, v in dom_dict.items():
             selected_genomes.append(random.choice(v))
 
         msa_dict = read_fasta(msa)
 
-        selected_genome_file = open(os.path.join(
-            output_dir, 'selected_genomes.lst'), 'w')
+        selected_genome_file = open(os.path.join(output_dir, 'selected_genomes.lst'), 'w')
         selected_msa_file = open(os.path.join(output_dir, 'msa_file.fa'), 'w')
         for sg in selected_genomes:
             selected_genome_file.write('{}\n'.format(sg))
@@ -83,19 +102,16 @@ class GenomeManager():
         selected_genome_file.close()
         selected_msa_file.close()
 
-        # Because module calls are not working properly in Python we generate a
-        # sh script to run after
-
+        # Taxonomy is stripped from reference tree
         subprocess.run(["genometreetk", "strip",tree,os.path.join(output_dir, 'gtdb_stripped.tree')])
 
-        # subprocess.run(["genetreetk", "prune", "--tree", os.path.join(output_dir, 'gtdb_stripped.tree'),
-        #                 "-t", os.path.join(output_dir, 'selected_genomes.lst'),
-        #                 "--output",os.path.join(output_dir, 'gtdb_pruned.tree')])
-
+        # Reference tree is pruned to only keep one genome per family
         prune(self.logger,os.path.join(output_dir, 'gtdb_stripped.tree'),
               os.path.join(output_dir, 'selected_genomes.lst'),
               os.path.join(output_dir, 'gtdb_pruned.tree'))
 
+        # a log file is created to matches the new MSA and pruned tree
+        # This log file is requiered for pplacer
         with open(os.path.join(output_dir, 'msa_file.fa'), 'rb', 0) as in_stream, open(os.path.join(output_dir, 'fitted_tree.tree'), 'wb', 0) as out_stream:
             proc = subprocess.Popen(
                 ["FastTreeMP", "-nome", "-mllen", "-intree", os.path.join(output_dir, 'gtdb_pruned.tree'), '-log',
@@ -103,26 +119,20 @@ class GenomeManager():
             print("the commandline is {}".format(proc.args))
             proc.communicate()
 
-
+        # This is a step when we modify the log fitting file from pplacer
+        # We want to keep all information from the log but we do not want to rescale the branches
+        # So the idea is to replace the latest iteration from the fitting step with the original tree
         merge_logs(os.path.join(output_dir, 'log_fitting.log'),
                    os.path.join(output_dir, "gtdb_pruned.tree"),
                    os.path.join(output_dir, "log_fitting_merged.log"))
 
-
+        # we redecorate the tree
+        # because the topology stays the same there should not be any polyphyletic groups
         decorated_tree = os.path.join(output_dir, 'decorated_tree.tree')
         subprocess.run(["phylorank", "decorate", os.path.join(output_dir, 'gtdb_pruned.tree'),
                         taxonomy_file,decorated_tree,"--skip_rd_refine"])
 
-        # first get all lines from file
-        with open(decorated_tree, 'r') as f:
-            lines = f.readlines()
-
-        # remove spaces
-        lines = [line.replace(' ', '') for line in lines]
-
-        # finally, write lines in the file
-        with open(decorated_tree, 'w') as f:
-            f.writelines(lines)
+        remove_character(decorated_tree,' ')
 
         # create pplacer package
         subprocess.run(["taxit","create","-l",os.path.join(output_dir,'gtdbtk_package_high_level'),
@@ -131,7 +141,20 @@ class GenomeManager():
                         "--tree-stats",os.path.join(output_dir, 'log_fitting_merged.log'),
                         "--tree-file",decorated_tree])
 
-    def regenerate_red_values(self, raw_tree, pruned_trees, red_file, output):
+    def regenerate_red_values(self, raw_tree, pruned_tree_path, red_file, output):
+        """
+
+        @param raw_tree: str
+            Path to GTDB reference tree
+        @param pruned_tree_path: str
+            Path to the new pruned tree
+        @param red_file: str
+            Path to GTDB reference RED file
+        @param output:
+            Path to the output file
+        @return:
+        """
+
         unpruned_tree = dendropy.Tree.get_from_path(raw_tree,
                                                     schema='newick',
                                                     rooting='force-rooted',
@@ -161,7 +184,7 @@ class GenomeManager():
                         node = leaf_node_map[labels[0]]
                         node.rel_dist = float(red_value)
                         reference_nodes.add(node)
-        pruned_tree = dendropy.Tree.get_from_path(pruned_trees,
+        pruned_tree = dendropy.Tree.get_from_path(pruned_tree_path,
                                                   schema='newick',
                                                   rooting='force-rooted',
                                                   preserve_underscores=True)
@@ -169,6 +192,7 @@ class GenomeManager():
         self._write_rd(pruned_tree, output, unpruned_tree)
 
     def regenerate_low_tree_red(self, split_tree_dir, raw_tree, red_file):
+        """ Regenerate the red file for each species level sub tree"""
         for reffile in os.listdir(split_tree_dir):
             if reffile.endswith("_reference.tree"):
                 output_file = os.path.join(split_tree_dir, 'red_value_'+reffile.replace('_reference.tree','.tsv'))
@@ -182,7 +206,6 @@ class GenomeManager():
         for n in pruned_tree.preorder_node_iter():
             if n.is_leaf():
                 fout.write('%s\t%f\n' % (n.taxon.label, 1.00))
-                #fout.write('%s\t%f\n' % (n.taxon.label, n.rel_dist))
             else:
                 # get left and right taxa that define this node
                 taxa = list(n.preorder_iter(lambda n: n.is_leaf()))

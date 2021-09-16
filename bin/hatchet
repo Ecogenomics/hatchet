@@ -54,7 +54,7 @@ def print_help():
 
     Workflow:
     pick          -> Pick one genome for a specified rank
-    recreate_red  -> Regenerate RED values file for the new pruned tree.
+    red           -> Regenerate RED values file for the new pruned tree.
     split         -> Split Reference tree into lower ranks subtrees
     red_low       -> Regenerate RED values file for the new low level trees.
     merge_logs    -> Merge log files. Replace last tree in log fitting with the original tree. This new log fitting
@@ -128,6 +128,7 @@ def __rank_of_interest(group,required):
                        help='Rank of Interest.',
                        default='f',
                        choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
+
 def __rank_to_split(group,required):
     group.add_argument('-r', '--rank_to_split',
                        required=required,
@@ -154,15 +155,15 @@ def __split_trees_dir(group,required):
                         help='Output directory from split function.')
 
 def __output_file(group, required):
-    group.add_argument('-o','--out_file', required=True,
+    group.add_argument('-o','--out_file', required=required,
                             help='Output file.')
 
 def __input_log(group, required):
-    group.add_argument('-i','--input_log', required=True,
+    group.add_argument('-i','--input_log', required=required,
                             help='Output file.')
 
 def __output_log(group, required):
-    group.add_argument('-o','--output_log', required=True,
+    group.add_argument('-o','--output_log', required=required,
                             help='Output file.')
 
 
@@ -198,9 +199,9 @@ def get_main_parser():
             __ref_msa(grp, required=True)
             __taxonomy_file(grp, required=True)
             __domain(grp, required=True)
-            __rank_to_split(grp, required=True)
             __output_dir(grp, required=True)
         with arg_group(parser, 'options arguments') as grp:
+            __rank_to_split(grp, required=False)
             __silent(grp)
 
     with subparser(sub_parsers, 'red_low', 'Regenerate RED values file for the new low level trees based on the original red.') as parser:
@@ -257,19 +258,29 @@ def main():
         if hasattr(args, 'silent'):
             silent = args.silent
 
+
         try:
-            make_sure_path_exists(args.output_dir)
-            logger_setup(os.path.dirname(args.output_dir),
+            make_sure_path_exists(args.out_dir)
+            logger_setup(args.out_dir,
                          'hatchet.log',
                          'Hatchet',
                          __version__,
                          silent)
+
         except:
-            logger_setup('.',
-                         'hatchet.log',
-                         'Hatchet',
-                         __version__,
-                         silent)
+            try:
+                make_sure_path_exists(args.out_file)
+                logger_setup(os.path.dirname(args.out_file),
+                            'hatchet.log',
+                             'Hatchet',
+                             __version__,
+                             silent)
+            except:
+                logger_setup('.',
+                             'hatchet.log',
+                             'Hatchet',
+                             __version__,
+                             silent)
 
         # do what we came here to do
         try:

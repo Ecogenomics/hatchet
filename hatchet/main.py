@@ -64,7 +64,7 @@ class OptionsParser():
         g = GenomeManager()
         self.logger.info('High level genome picking....')
         g.pick_one_genome(options.ref_tree, options.msa, options.tax,
-                          options.domain, options.rank_of_interest, high_level_directory)
+                           options.domain, options.rank_of_interest, high_level_directory)
 
 
         pruned_tree = os.path.join(high_level_directory, "gtdb_pruned.tree")

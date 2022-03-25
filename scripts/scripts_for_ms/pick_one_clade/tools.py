@@ -3,9 +3,11 @@ import gzip
 import logging
 import os
 import sys
+import tempfile
 import traceback
 
 import dendropy
+from tqdm import tqdm
 
 
 def get_leaf_nodes(d_node_desc,node):
@@ -247,7 +249,7 @@ def prune(input_tree, taxa_to_retain_file, output_tree):
                        unquoted_underscores=True)
 
 
-def regenerate_red_values(raw_tree, pruned_trees, red_file, output):
+def regenerate_red_values(raw_tree, pruned_trees, red_file, output,type_tree='NA'):
     unpruned_tree = dendropy.Tree.get_from_path(raw_tree,
                                                 schema='newick',
                                                 rooting='force-rooted',
@@ -282,16 +284,18 @@ def regenerate_red_values(raw_tree, pruned_trees, red_file, output):
                                               rooting='force-rooted',
                                               preserve_underscores=True)
 
-    write_rd(pruned_tree, output, unpruned_tree)
+    if type_tree == 'backbone':
+        write_rd_backbone_tree(pruned_tree, output, unpruned_tree)
+    elif type_tree == 'species':
+        write_rd_species_tree(pruned_tree, output, unpruned_tree,red_file)
 
-def write_rd(pruned_tree, output_rd_file, unpruned_tree):
+def write_rd_backbone_tree(pruned_tree, output_rd_file, unpruned_tree):
     """Write out relative divergences for each node."""
 
     fout = open(output_rd_file, 'w')
     for n in pruned_tree.preorder_node_iter():
         if n.is_leaf():
             fout.write('%s\t%f\n' % (n.taxon.label, 1.00))
-            #fout.write('%s\t%f\n' % (n.taxon.label, n.rel_dist))
         else:
             # get left and right taxa that define this node
             taxa = list(n.preorder_iter(lambda n: n.is_leaf()))
@@ -300,6 +304,37 @@ def write_rd(pruned_tree, output_rd_file, unpruned_tree):
                 taxon_labels=[taxa[0].taxon.label, taxa[-1].taxon.label])
             fout.write('%s|%s\t%f\n' %
                        (taxa[0].taxon.label, taxa[-1].taxon.label, reldist_node.rel_dist))
+
+    fout.close()
+
+def write_rd_species_tree(pruned_tree, output_rd_file, unpruned_tree,red_file):
+    """Write out relative divergences for each node."""
+
+    red_infos={}
+    with open(red_file) as redf:
+        for line in redf:
+            if '|' in line:
+                infos = line.strip().split('\t')
+                nodeone,nodetwo=infos[0].split('|')
+                red_infos[(nodeone,nodetwo)] = infos[1]
+
+    fout = open(output_rd_file, 'w')
+    lennodeider = len(list(pruned_tree.preorder_node_iter()))
+    for n in tqdm(pruned_tree.preorder_node_iter(),total=lennodeider):
+        if n.is_leaf():
+            fout.write('%s\t%f\n' % (n.taxon.label, 1.00))
+        else:
+            # get left and right taxa that define this node
+            taxa = list(n.preorder_iter(lambda n: n.is_leaf()))
+            if (taxa[0].taxon.label, taxa[-1].taxon.label) in red_infos:
+                fout.write('%s|%s\t%s\n' %
+                           (taxa[0].taxon.label, taxa[-1].taxon.label, red_infos.get((taxa[0].taxon.label, taxa[-1].taxon.label))))
+            else:
+                # get rel_dist of this node in the original tree
+                reldist_node = unpruned_tree.mrca(
+                    taxon_labels=[taxa[0].taxon.label, taxa[-1].taxon.label])
+                fout.write('%s|%s\t%f\n' %
+                           (taxa[0].taxon.label, taxa[-1].taxon.label, reldist_node.rel_dist))
 
     fout.close()
 
@@ -326,3 +361,54 @@ def merge_logs(log_fitting_in,non_fitted_tree,log_fitting_out):
                     output_file.write(line)
             else:
                 output_file.write(line)
+
+def symlink(self,target, link_name, overwrite=False):
+    '''
+    Create a symbolic link named link_name pointing to target.
+    If link_name exists then FileExistsError is raised, unless overwrite=True.
+    When trying to overwrite a directory, IsADirectoryError is raised.
+    '''
+
+    if not overwrite:
+        os.symlink(target, link_name)
+        return
+
+    # os.replace() may fail if files are on different filesystems
+    link_dir = os.path.dirname(link_name)
+
+    # Create link to target with temporary filename
+    while True:
+        temp_link_name = tempfile.mktemp(dir=link_dir)
+
+        # os.* functions mimic as closely as possible system functions
+        # The POSIX symlink() returns EEXIST if link_name already exists
+        # https://pubs.opengroup.org/onlinepubs/9699919799/functions/symlink.html
+        try:
+            os.symlink(target, temp_link_name)
+            break
+        except FileExistsError:
+            pass
+
+    # Replace link_name with temp_link_name
+    try:
+        # Pre-empt os.replace on a directory with a nicer message
+        if not os.path.islink(link_name) and os.path.isdir(link_name):
+            raise IsADirectoryError(f"Cannot symlink over existing directory: '{link_name}'")
+        os.replace(temp_link_name, link_name)
+    except:
+        if os.path.islink(temp_link_name):
+            os.remove(temp_link_name)
+        raise
+# Handle critical errors
+
+
+def yesno(question):
+    """Simple Yes/No Function."""
+    prompt = f'{question} ? (y/n): '
+    ans = input(prompt).strip().lower()
+    if ans not in ['y', 'n']:
+        print(f'{ans} is invalid, please try again...')
+        return yesno(question)
+    if ans == 'y':
+        return True
+    return False

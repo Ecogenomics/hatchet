@@ -3,9 +3,11 @@ import gzip
 import logging
 import os
 import sys
+import tempfile
 import traceback
 
 import dendropy
+from tqdm import tqdm
 
 
 def get_leaf_nodes(d_node_desc,node):
@@ -277,6 +279,7 @@ def regenerate_red_values(raw_tree, pruned_trees, red_file, output):
                     node = leaf_node_map[labels[0]]
                     node.rel_dist = float(red_value)
                     reference_nodes.add(node)
+    print('Identified %d reference nodes.' % len(reference_nodes))
     pruned_tree = dendropy.Tree.get_from_path(pruned_trees,
                                               schema='newick',
                                               rooting='force-rooted',
@@ -288,7 +291,9 @@ def write_rd(pruned_tree, output_rd_file, unpruned_tree):
     """Write out relative divergences for each node."""
 
     fout = open(output_rd_file, 'w')
-    for n in pruned_tree.preorder_node_iter():
+    len_node = len(list(pruned_tree.preorder_node_iter()))
+    for idx,n in enumerate(pruned_tree.preorder_node_iter()):
+        print(f'{idx}/{len_node}', end='\r')
         if n.is_leaf():
             fout.write('%s\t%f\n' % (n.taxon.label, 1.00))
             #fout.write('%s\t%f\n' % (n.taxon.label, n.rel_dist))
@@ -326,3 +331,67 @@ def merge_logs(log_fitting_in,non_fitted_tree,log_fitting_out):
                     output_file.write(line)
             else:
                 output_file.write(line)
+
+def symlink(target, link_name, overwrite=False):
+    '''
+    Create a symbolic link named link_name pointing to target.
+    If link_name exists then FileExistsError is raised, unless overwrite=True.
+    When trying to overwrite a directory, IsADirectoryError is raised.
+    '''
+
+    if not overwrite:
+        os.symlink(target, link_name)
+        return
+
+    # os.replace() may fail if files are on different filesystems
+    link_dir = os.path.dirname(link_name)
+
+    # Create link to target with temporary filename
+    while True:
+        temp_link_name = tempfile.mktemp(dir=link_dir)
+
+        # os.* functions mimic as closely as possible system functions
+        # The POSIX symlink() returns EEXIST if link_name already exists
+        # https://pubs.opengroup.org/onlinepubs/9699919799/functions/symlink.html
+        try:
+            os.symlink(target, temp_link_name)
+            break
+        except FileExistsError:
+            pass
+
+    # Replace link_name with temp_link_name
+    try:
+        # Pre-empt os.replace on a directory with a nicer message
+        if not os.path.islink(link_name) and os.path.isdir(link_name):
+            raise IsADirectoryError(f"Cannot symlink over existing directory: '{link_name}'")
+        os.replace(temp_link_name, link_name)
+    except:
+        if os.path.islink(temp_link_name):
+            os.remove(temp_link_name)
+        raise
+# Handle critical errors
+
+
+def yesno(question):
+    """Simple Yes/No Function."""
+    prompt = f'{question} ? (y/n): '
+    ans = input(prompt).strip().lower()
+    if ans not in ['y', 'n']:
+        print(f'{ans} is invalid, please try again...')
+        return yesno(question)
+    if ans == 'y':
+        return True
+    return False
+
+def unroot(rooted_tree, unrooted_tree):
+    # get taxonomic classification of each user genome
+    tree = dendropy.Tree.get_from_path(rooted_tree,
+                                       schema='newick',
+                                       rooting='force-rooted',
+                                       preserve_underscores=True)
+    tree.deroot()
+    tree.write_to_path(unrooted_tree,
+                       schema='newick',
+                       suppress_rooting=True,
+                       unquoted_underscores=True)
+    return True

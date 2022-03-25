@@ -29,7 +29,7 @@ from collections import defaultdict, Counter
 
 from hatchet.biolib_lite.common import make_sure_path_exists
 from hatchet.biolib_lite.seq_io import read_fasta
-from hatchet.tools import merge_logs, remove_character
+from hatchet.tools import merge_logs, remove_character, unroot
 
 
 class TreeManager():
@@ -308,13 +308,30 @@ class TreeManager():
 
         remove_character(decorated_tree_file,' ')
 
+        #we unroot the tree
+        unrooted_tree = os.path.join(outdir, 'decorated_unrooted_tree.tree')
+        unrooted_undecorated_tree = os.path.join(outdir, 'nondecorated_unrooted_tree.tree')
+        if os.path.exists(unrooted_tree):
+            os.remove(unrooted_tree)
+        if os.path.exists(unrooted_undecorated_tree):
+            os.remove(unrooted_undecorated_tree)
+        unroot(decorated_tree_file, unrooted_tree)
+        unroot(rooted_tree_file, unrooted_undecorated_tree)
+
+
+        # This is a step when we modify the log fitting file from pplacer
+        # We want to keep all information from the log but we do not want to rescale the branches
+        # So the idea is to replace the latest iteration from the fitting step with the original tree
+        merge_logs(log_fitting_file,
+                   stripped_tree_file,
+                   log_fitting_merged_file)
 
         # create pplacer package
         subprocess.run(["taxit","create","-l",package_name,
                        "-P",package_name,
                         "--aln-fasta",aln_file,
                         "--tree-stats",log_fitting_merged_file,
-                        "--tree-file",decorated_tree_file])
+                        "--tree-file",unrooted_tree])
 
 
     def purge_reload(self, shell_command_file, cmd,conda_activate = None):

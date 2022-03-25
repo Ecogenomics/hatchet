@@ -54,6 +54,19 @@ def execute(cmd):
     if return_code:
         raise subprocess.CalledProcessError(return_code, cmd)
 
+def unroot(rooted_tree, unrooted_tree):
+    # get taxonomic classification of each user genome
+    tree = dendropy.Tree.get_from_path(rooted_tree,
+                                       schema='newick',
+                                       rooting='force-rooted',
+                                       preserve_underscores=True)
+    tree.deroot()
+    tree.write_to_path(unrooted_tree,
+                       schema='newick',
+                       suppress_rooting=True,
+                       unquoted_underscores=True)
+    return True
+
 def prune(selflogger,input_tree, taxa_to_retain_file, output_tree):
     """Prune tree.
 

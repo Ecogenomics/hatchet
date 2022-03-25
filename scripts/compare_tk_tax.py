@@ -30,6 +30,7 @@ __email__ = 'p.chaumeil@uq.edu.au'
 __status__ = 'Development'
 
 import argparse
+import collections
 import sys
 from collections import defaultdict
 
@@ -163,32 +164,38 @@ class Comparator(object):
         #     print("\n")
         # =========================================================================
 
-        self.create_rank_table(rank_table)
+        self.create_rank_table(rank_table,gtdb_final_taxonomy)
 
-    def create_rank_table(self, rank_table):
+    def create_rank_table(self, rank_table,gtdb_final_taxonomy):
         """
         Calculate statistics
         """
 
         status = ['correct', 'conflicting',
                   'overclassified', 'underclassified']
-        print("rank|#_genomes|" + "|".join(status))
+        print("rank\t#_genomes\tunique_taxa\t" + "\t".join(status))
 
-        list_ranks_accross = [0] * 6
+        list_ranks_accross = [0] * 7
         list_ranks_accross[0] = 'Total'
-        for k in ["d__", "p__", "c__", "o__", "f__", "g__", "s__"]:
-            string_result = '{}|'.format(k)
+        for idx_k,k in enumerate(["d__", "p__", "c__", "o__", "f__", "g__", "s__"]):
+            string_result = '{}\t'.format(k)
             v = rank_table.get(k)
             nbr_genomes = 0
+            rank_clade = []
             for stat in status:
                 infos = v.get(stat)
                 nbr_genomes += len(infos.get('genomes'))
+                for gen in infos.get('genomes'):
+                    rank_clade.append(gtdb_final_taxonomy.get("_".join(gen[0].split("_", 2)[:2])).split(";")[idx_k])
+                    #rank_clade.append(gen[1].split(";")[idx_k])
+                #print(collections.Counter(rank_clade).most_common(30))
+            unique_rank_clade = set(rank_clade)
+            string_result = string_result + '{}\t{}'.format(nbr_genomes, len(unique_rank_clade))
 
-            string_result = string_result + '{}'.format(nbr_genomes)
 
             for idx, stat in enumerate(status):
                 infos = v.get(stat)
-                list_ranks_accross[idx + 2] = list_ranks_accross[idx + 2] + \
+                list_ranks_accross[idx + 3] = list_ranks_accross[idx + 3] + \
                                               len(infos.get('genomes'))
                 list_ranks_accross[1] = list_ranks_accross[1] + \
                                         len(infos.get('genomes'))
@@ -200,14 +207,14 @@ class Comparator(object):
                 #     print(len(infos.get('genomes')))
                 if nbr_genomes != 0:
                     string_result = string_result + \
-                                    "|{} ({}%)".format(len(infos.get('genomes')),
+                                    "\t{} ({}%)".format(len(infos.get('genomes')),
                                                        round(len(infos.get('genomes')) * 100.0 / nbr_genomes, 2))
                 else:
                     string_result = string_result + \
-                                    "|{} ({}%)".format(len(infos.get('genomes')), '0.0')
+                                    "\t{} ({}%)".format(len(infos.get('genomes')), '0.0')
 
             print(string_result)
-        print('|'.join([str(x) for x in list_ranks_accross]))
+        print('\t'.join([str(x) for x in list_ranks_accross]))
         print("Done")
 
     def run_comparison(self, tk_nosplit, tk_split, high_lvl_tax, official_tax, tree_mapping,metadata_file, output_file):
@@ -215,7 +222,7 @@ class Comparator(object):
 
         nosplit_dict = {}
         with open(tk_nosplit, 'r') as nosplitfile:
-            print(nosplitfile.readline())
+            nosplitfile.readline()
             for line in nosplitfile:
                 infos = line.strip().split('\t')
                 nosplit_dict[infos[0]] = infos[1]
@@ -223,12 +230,12 @@ class Comparator(object):
 
         genome_backbone_classification_infos = {}
         with open(high_lvl_tax, 'r') as gltfile:
-            print(gltfile.readline())
+            gltfile.readline()
             for line in gltfile:
                 infos = line.strip().split('\t')
                 genome_backbone_classification_infos["_".join(
-                    infos[0].split("_", 2)[:2])] = infos[3]
-                red_value[infos[0]]['backbone'] = infos[4]
+                    infos[0].split("_", 2)[:2])] = infos[2]
+                red_value[infos[0]]['backbone'] = infos[5]
 
         genome_mapping = {}
         mapped_genomes = []
@@ -262,8 +269,8 @@ class Comparator(object):
                 split_dict[infos[0]] = infos[1]
 
         classified_high_tree_gids = [ "_".join(x.split("_", 2)[:2]) for x in split_dict.keys() if x not in mapped_genomes]
-        print(classified_high_tree_gids)
-        print(len(classified_high_tree_gids))
+        #print(classified_high_tree_gids)
+        #print(len(classified_high_tree_gids))
 
         # classified_high_tree_gids = []
         # with open(classified_only_backbone, 'r') as hightreefile:
@@ -277,9 +284,9 @@ class Comparator(object):
                 gid, tax = line.strip().split('\t')
                 gtdb_final_taxonomy[gid.replace('GB_', '').replace('RS_', '')] = tax
 
-        print(len(nosplit_dict), len(split_dict))
+        #print(len(nosplit_dict), len(split_dict))
 
-        main_list = list(set(nosplit_dict) - set(split_dict))
+        #main_list = list(set(nosplit_dict) - set(split_dict))
 
         # taxonomy overclassified in split
         tois = 0
@@ -321,6 +328,7 @@ class Comparator(object):
             print(f'{k} : {count}/{nosplit_len}', end='\r')
             if split_dict.get(k) != vnosplit:
                 countdiff += 1
+                print(split_dict.get(k))
                 split_rank_list = [rank for rank in split_dict.get(k).split(';') if len(rank) > 3]
                 nosplit_rank_list = [
                     rank for rank in vnosplit.split(';') if len(rank) > 3]

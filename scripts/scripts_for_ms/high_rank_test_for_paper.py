@@ -41,18 +41,27 @@ import tempfile
 import dendropy
 
 from tools import make_sure_path_exists, prune, read_fasta, regenerate_red_values, merge_logs
+from tqdm import tqdm
+
 
 
 class Tester(object):
     def __init__(self):
         self.rank_order = ['d', 'p', 'c', 'o', 'f', 'g', 's']
-        self.sample_size = 2
+        self.sample_size = 75
         self.processed_ranks = ['p__T1SED10-198M','p__B130-G9','p__Nitrospinota_B','p__RUG730','p__ARS69',
                                 'p__Deferribacterota','p__Latescibacterota','p__Zixibacteria','p__Marinisomatota',
                                 'p__Dictyoglomota']
 
         self.processed_ranks.extend(['c__Chthonomonadetes','c__SBBH01','c__SURF-8','c__B3-B38','c__RBG-13-61-14',
-                                     'c__Synergistia','c__UBA6624','c__DTU065','c__Desulfarculia','c__Coriobacteriia'])
+                                     'c__Synergistia','c__UBA6624','c__DTU065','c__Desulfarculia','c__Coriobacteriia',
+                                     'c__B3-LCP','c__Chlamydiia','c__MVCY01','c__Thermotogae','c__Binatia','c__Dictyoglomia',
+                                     'c__Negativicutes','c__UBA8468','c__Brevinematia','c__DTU030','c__RUG730','c__UBA994',
+                                     'c__Calescibacteriia','c__Marinamargulisbacteria','c__Thermoleophilia','c__4572-55',
+                                     'c__AABM5-125-24','c__Acidobacteriae','c__Aminicenantia','c__Bin61','c__Blastocatellia',
+                                     'c__RPQS01','c__SURF-5'])
+
+
 
         self.processed_ranks.extend(['o__Sporichthyales','o__SZUA-146','o__2-02-FULL-50-16','o__GCA-2747255',
                                      'o__DTU087','o__UBA1135','o__RF32','o__Paenibacillales','o__Synechococcales',
@@ -66,6 +75,28 @@ class Tester(object):
         self.processed_ranks.extend(['o__Bac17_many', 'o__FEN-1388_many', 'o__Propionisporales_many', 'o__UBA2242_many', 'o__UTPRO1_many',
          'o__C00003060_many', 'o__Izemoplasmatales_many', 'o__Sedimentisphaerales_many', 'o__UBA2968_many',
          'o__Cryosericales_many', 'o__Piscirickettsiales_many', 'o__Thiotrichales_many', 'o__UBA5794_many'])
+
+        self.processed_ranks.extend(['p__Cyanobacteria','p__Nitrospinota_B','p__Deferribacterota','p__NPL-UPA2','p__Desulfobacterota_D',
+                                     'p__Proteobacteria','p__Dictyoglomota','p__RUG730','p__FEN-1099','p__SAR324','p__Fibrobacterota',
+                                     'p__T1SED10-198M','p__4572-55','p__Firmicutes_F','p__TA06','p__Aerophobota','p__Fusobacteriota',
+                                     'p__UBP15','p__ARS69','p__Latescibacterota','p__Zixibacteria','p__B130-G9','p__Marinisomatota',
+                                     'p__Caldisericota','p__Myxococcota'])
+
+        self.processed_ranks.extend(['o__2-02-FULL-50-16', 'o__Bac17', 'o__C00003060', 'o__CACIAM-69d', 'o__Cryosericales', 'o__DTU087',
+         'o__FEN-1388', 'o__GCA-2747255', 'o__Izemoplasmatales', 'o__Mycobacteriales', 'o__Paenibacillales',
+         'o__Piscirickettsiales', 'o__Propionisporales', 'o__RF32', 'o__Sedimentisphaerales', 'o__Sporichthyales',
+         'o__Synechococcales', 'o__SZUA-146', 'o__Thiotrichales', 'o__UBA1135', 'o__UBA2199', 'o__UBA2242',
+         'o__UBA2968', 'o__UBA5794', 'o__UTPRO1'])
+
+        self.processed_ranks.extend(['f__4484-213', 'f__AcAMD-5', 'f__Chthoniobacteraceae', 'f__Ectothiorhodospiraceae', 'f__Eggerthellaceae',
+         'f__Kyrpidiaceae', 'f__LD1', 'f__Obscuribacteraceae', 'f__Salinivirgaceae', 'f__SCGC-AAA003-L08', 'f__SG8-11',
+         'f__SKZP01', 'f__SZUA-8', 'f__TC1', 'f__TMED131', 'f__UBA1149', 'f__UBA1212', 'f__UBA2193', 'f__UBA2242',
+         'f__UBA3054', 'f__UBA3505', 'f__UBA5859', 'f__UBA6191', 'f__UBA7430', 'f__XYD1-FULL-40-9'])
+
+        self.processed_ranks.extend(['g__32-111', 'g__Alicyclobacillus_G', 'g__Arcicella', 'g__ARS1224', 'g__Brachymonas', 'g__CAADGG01',
+         'g__Chitinivorax', 'g__DTU052', 'g__Glycomyces', 'g__Haemophilus_A', 'g__Henriciella', 'g__Natronincola',
+         'g__Pontivivens', 'g__Synechococcus_E', 'g__SZUA-24', 'g__SZUA-33', 'g__UASB124', 'g__UBA10009', 'g__UBA10329',
+         'g__UBA11398', 'g__UBA1217', 'g__UBA2466', 'g__UBA2593', 'g__UBA4656', 'g__UBA7236'])
 
 
     def regenerate_red_values(self, raw_tree, pruned_trees, red_file, output):
@@ -103,24 +134,37 @@ class Tester(object):
                                                   rooting='force-rooted',
                                                   preserve_underscores=True)
 
-        self._write_rd(pruned_tree, output, unpruned_tree)
+        self._write_rd(pruned_tree, output, unpruned_tree,red_file)
 
-    def _write_rd(self, pruned_tree, output_rd_file, unpruned_tree):
+    def _write_rd(self, pruned_tree, output_rd_file, unpruned_tree,red_file):
         """Write out relative divergences for each node."""
 
+        red_infos={}
+        with open(red_file) as redf:
+            for line in redf:
+                if '|' in line:
+                    infos = line.strip().split('\t')
+                    nodeone,nodetwo=infos[0].split('|')
+                    red_infos[(nodeone,nodetwo)] = infos[1]
+
         fout = open(output_rd_file, 'w')
-        for n in pruned_tree.preorder_node_iter():
+        lennodeider = len(list(pruned_tree.preorder_node_iter()))
+        for n in tqdm(pruned_tree.preorder_node_iter(),total=lennodeider):
             if n.is_leaf():
                 fout.write('%s\t%f\n' % (n.taxon.label, 1.00))
                 #fout.write('%s\t%f\n' % (n.taxon.label, n.rel_dist))
             else:
                 # get left and right taxa that define this node
                 taxa = list(n.preorder_iter(lambda n: n.is_leaf()))
-                # get rel_dist of this node in the original tree
-                reldist_node = unpruned_tree.mrca(
-                    taxon_labels=[taxa[0].taxon.label, taxa[-1].taxon.label])
-                fout.write('%s|%s\t%f\n' %
-                           (taxa[0].taxon.label, taxa[-1].taxon.label, reldist_node.rel_dist))
+                if (taxa[0].taxon.label, taxa[-1].taxon.label) in red_infos:
+                    fout.write('%s|%s\t%s\n' %
+                               (taxa[0].taxon.label, taxa[-1].taxon.label, red_infos.get((taxa[0].taxon.label, taxa[-1].taxon.label))))
+                else:
+                    # get rel_dist of this node in the original tree
+                    reldist_node = unpruned_tree.mrca(
+                        taxon_labels=[taxa[0].taxon.label, taxa[-1].taxon.label])
+                    fout.write('%s|%s\t%f\n' %
+                               (taxa[0].taxon.label, taxa[-1].taxon.label, reldist_node.rel_dist))
 
         fout.close()
 
@@ -145,18 +189,13 @@ class Tester(object):
 
 
 
-
-
         for idx,name_rank in enumerate(list_genomes):
 
-            if count == 'all':
-                tnpr_list = taxonomy_number_per_rank.get(name_rank)
-                if len(tnpr_list) == 1:
-                    count = 'one'
-                else:
-                    count = 'many'
 
-            outdir = os.path.join(out_dir,f'{name_rank}_{count}')
+            outdir = os.path.join(out_dir,f'{name_rank}')
+            if os.path.isdir(outdir):
+               print(f"We skip {name_rank}")
+               continue
             make_sure_path_exists(outdir)
 
             subprocess.run(["genometreetk", "strip", ref_tree, os.path.join(outdir, 'gtdb_stripped.tree')])
@@ -178,6 +217,7 @@ class Tester(object):
             #genome folder to copy genomes to analyse
             genome_folder_to_analyse = os.path.join(outdir,'genomes')
             make_sure_path_exists(genome_folder_to_analyse)
+            batchfile = open(os.path.join(genome_folder_to_analyse,'batchfile.tsv'),'w')
 
             untrimmed_msa_dict = read_fasta(os.path.join(original_tk_folder,'msa','gtdb_r95_bac120.faa'))
             untrimmed_msa_file = open(os.path.join(outdir, 'untrimmed_msa.faa'), 'w')
@@ -190,11 +230,15 @@ class Tester(object):
                     genome_folder_pathfile[infos[0].replace('_genomic.fna.gz','')] = infos[1]
 
 
+
             for gen in taxonomy_number_per_rank.get(name_rank):
                 gen = gen.replace('GB_','').replace('RS_','')
                 genometocopy = os.path.join(original_tk_folder,'fastani',genome_folder_pathfile.get(gen),gen+'_genomic.fna.gz')
 
-                shutil.copy(genometocopy,genome_folder_to_analyse)
+                batchfile.write(f'{genometocopy}\t{gen}_genomic\n')
+            batchfile.close()
+
+                #shutil.copy(genometocopy,genome_folder_to_analyse)
 
             for selge in selected_genomes:
                 selected_g_file.write(f'{selge}\n')
@@ -363,23 +407,23 @@ class Tester(object):
                 key='many'
             genome_per_name.setdefault(key,[]).append(k)
             genome_per_name.setdefault('all',[]).append(k)
-        list_one_g = []
-        if '1' in genome_per_name:
-            if len(genome_per_name.get('1')) > self.sample_size :
-                list_one_g = (random.sample(genome_per_name.get('1'), self.sample_size))
-            else:
-                list_one_g = (genome_per_name.get('1'))
+        # list_one_g = []
+        # if '1' in genome_per_name:
+        #     if len(genome_per_name.get('1')) > self.sample_size :
+        #         list_one_g = (random.sample(genome_per_name.get('1'), self.sample_size))
+        #     else:
+        #         list_one_g = (genome_per_name.get('1'))
 
-        list_many_g = []
-        if 'many' in genome_per_name:
-            if len(genome_per_name.get('many')) > self.sample_size :
-                list_many_g = (random.sample(genome_per_name.get('many'), self.sample_size))
-            else:
-                list_many_g = (genome_per_name.get('many'))
+        # list_many_g = []
+        # if 'many' in genome_per_name:
+        #     if len(genome_per_name.get('many')) > self.sample_size :
+        #         list_many_g = (random.sample(genome_per_name.get('many'), self.sample_size))
+        #     else:
+        #         list_many_g = (genome_per_name.get('many'))
 
         # We removed processed ranks
-        list_all_g = (random.sample([x for x in (genome_per_name.get('all')) if x not in self.processed_ranks], self.sample_size))
-        list_all_g = ['o__FEN-1388','o__UBA5794']
+        list_all_g = [x for x in (genome_per_name.get('all')) if x not in self.processed_ranks]
+        list_all_g = (random.sample(list_all_g, self.sample_size))
         print(list_all_g)
 
         ans = self.yesno("Happy with this list?")

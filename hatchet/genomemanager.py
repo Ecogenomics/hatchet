@@ -25,7 +25,9 @@ import subprocess
 
 
 from hatchet.biolib_lite.seq_io import read_fasta
-from hatchet.tools import merge_logs, prune, remove_character
+from hatchet.tools import merge_logs, prune, remove_character,unroot
+
+random.seed(10)
 
 
 class GenomeManager():
@@ -119,12 +121,6 @@ class GenomeManager():
             print("the commandline is {}".format(proc.args))
             proc.communicate()
 
-        # This is a step when we modify the log fitting file from pplacer
-        # We want to keep all information from the log but we do not want to rescale the branches
-        # So the idea is to replace the latest iteration from the fitting step with the original tree
-        merge_logs(os.path.join(output_dir, 'log_fitting.log'),
-                   os.path.join(output_dir, "gtdb_pruned.tree"),
-                   os.path.join(output_dir, "log_fitting_merged.log"))
 
         # we redecorate the tree
         # because the topology stays the same there should not be any polyphyletic groups
@@ -134,12 +130,30 @@ class GenomeManager():
 
         remove_character(decorated_tree,' ')
 
+        #we unroot the tree
+        unrooted_tree = os.path.join(output_dir, 'decorated_unrooted_tree.tree')
+        unrooted_undecorated_tree = os.path.join(output_dir, 'nondecorated_unrooted_tree.tree')
+        if os.path.exists(unrooted_tree):
+            os.remove(unrooted_tree)
+        if os.path.exists(unrooted_undecorated_tree):
+            os.remove(unrooted_undecorated_tree)
+        unroot(decorated_tree, unrooted_tree)
+        unroot(os.path.join(output_dir, 'gtdb_pruned.tree'), unrooted_undecorated_tree)
+
+        # This is a step when we modify the log fitting file from pplacer
+        # We want to keep all information from the log but we do not want to rescale the branches
+        # So the idea is to replace the latest iteration from the fitting step with the original tree
+        merge_logs(os.path.join(output_dir, 'log_fitting.log'),
+                   unrooted_undecorated_tree,
+                   os.path.join(output_dir, "log_fitting_merged.log"))
+
         # create pplacer package
         subprocess.run(["taxit","create","-l",os.path.join(output_dir,'gtdbtk_package_high_level'),
                        "-P",os.path.join(output_dir,'gtdbtk_package_high_level'),
                         "--aln-fasta",os.path.join(output_dir, 'msa_file.fa'),
                         "--tree-stats",os.path.join(output_dir, 'log_fitting_merged.log'),
-                        "--tree-file",decorated_tree])
+                        "--tree-file",unrooted_tree])
+
 
     def regenerate_red_values(self, raw_tree, pruned_tree_path, red_file, output):
         """

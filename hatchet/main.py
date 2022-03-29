@@ -19,7 +19,7 @@ import sys
 import logging
 
 from hatchet.biolib_lite.common import make_sure_path_exists
-from hatchet.tools import merge_logs
+from hatchet.tools import merge_logs, unroot
 
 from hatchet.genomemanager import GenomeManager
 from hatchet.treemanager import TreeManager
@@ -56,6 +56,10 @@ class OptionsParser():
 
     def merge_logs(self, options):
         merge_logs(options.input_log,options.pruned_tree,options.output_log)
+
+    def unroot_tree(self,options):
+
+        unroot(options.input_tree, options.output_tree)
 
     def hatchet_wf(self,options):
         make_sure_path_exists(options.out_dir)
@@ -95,8 +99,11 @@ class OptionsParser():
             self.regenerate_low_tree_red(options)
         elif options.subparser_name == 'merge_logs':
             self.merge_logs(options)
+        elif options.subparser_name == 'unroot':
+            self.unroot_tree(options)
         elif options.subparser_name == 'hatchet_wf':
             self.hatchet_wf(options)
+
         else:
             self.logger.error('Unknown command: ' +
                               options.subparser_name + '\n')

@@ -59,6 +59,7 @@ def print_help():
     red_low       -> Regenerate RED values file for the new low level trees.
     merge_logs    -> Merge log files. Replace last tree in log fitting with the original tree. This new log fitting
                      is used in pplacer package
+    unroot        -> Unroot a tree.
     
     hatchet_wf    -> pick -> recreate_red -> split -> red_low
     
@@ -161,6 +162,13 @@ def __output_file(group, required):
 def __input_log(group, required):
     group.add_argument('-i','--input_log', required=required,
                             help='Output file.')
+def __input_tree(group, required):
+    group.add_argument('--input_tree', required=required,
+                            help='Input tree.')
+
+def __output_tree(group, required):
+    group.add_argument('--output_tree', required=required,
+                            help='Output tree.')
 
 def __output_log(group, required):
     group.add_argument('-o','--output_log', required=required,
@@ -217,6 +225,13 @@ def get_main_parser():
             __input_log(grp, required=True)
             __pruned_tree(grp, required=True)
             __output_log(grp,required=True)
+        with arg_group(parser, 'options arguments') as grp:
+            __silent(grp)
+
+    with subparser(sub_parsers, 'unroot', 'Unroot a tree.') as parser:
+        with arg_group(parser, 'required named arguments') as grp:
+            __input_tree(grp, required=True)
+            __output_tree(grp,required=True)
         with arg_group(parser, 'options arguments') as grp:
             __silent(grp)
 

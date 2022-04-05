@@ -35,7 +35,8 @@ class OptionsParser():
         make_sure_path_exists(options.out_dir)
         p = GenomeManager()
         p.pick_one_genome(options.ref_tree, options.msa, options.tax,
-                          options.domain, options.rank_of_interest, options.out_dir)
+                          options.domain,options.original_log,
+                          options.rank_of_interest, options.out_dir)
 
     def regenerate_red_values(self, options):
         p = GenomeManager()
@@ -68,7 +69,8 @@ class OptionsParser():
         g = GenomeManager()
         self.logger.info('High level genome picking....')
         g.pick_one_genome(options.ref_tree, options.msa, options.tax,
-                           options.domain, options.rank_of_interest, high_level_directory)
+                          options.domain,options.original_log,
+                          options.rank_of_interest,  high_level_directory)
 
 
         pruned_tree = os.path.join(high_level_directory, "gtdb_pruned.tree")
@@ -83,7 +85,7 @@ class OptionsParser():
         t = TreeManager(options.ref_tree, options.tax,
                         options.rank_to_split, options.msa, options.domain)
         make_sure_path_exists(spe_level_directory)
-        t.split_tree(spe_level_directory)
+        t.split_tree(options.original_log,spe_level_directory)
 
         g.regenerate_low_tree_red(spe_level_directory, options.ref_tree, options.red_file)
 

@@ -159,6 +159,10 @@ def __output_file(group, required):
     group.add_argument('-o','--out_file', required=required,
                             help='Output file.')
 
+def __original_log(group, required):
+    group.add_argument('--original_log', required=required,
+                            help='Path to original FastTree log file.')
+
 def __input_log(group, required):
     group.add_argument('-i','--input_log', required=required,
                             help='Output file.')
@@ -189,6 +193,7 @@ def get_main_parser():
             __ref_msa(grp,required=True)
             __taxonomy_file(grp, required=True)
             __output_dir(grp, required=True)
+            __original_log(grp, required=True)
         with arg_group(parser, 'options arguments') as grp:
             __silent(grp)
 
@@ -243,6 +248,7 @@ def get_main_parser():
             __taxonomy_file(grp, required=True)
             __output_dir(grp, required=True)
             __ref_red_file(grp, required=True)
+            __original_log(grp, required=True)
         with arg_group(parser, 'options arguments') as grp:
             __silent(grp)
             __rank_of_interest(grp,required=False)

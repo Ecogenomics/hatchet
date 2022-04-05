@@ -29,7 +29,8 @@ def merge_logs(log_fitting_in,non_fitted_tree,log_fitting_out):
             if line.startswith('ML_Lengths'):
                 nber_iter += 1
                 if nber_iter == last_item:
-                    output_file.write(f"ML_Lengths\t{stripped_tree}\n")
+                    infos = line.split('\t')
+                    output_file.write(f"{infos[0]}\t{stripped_tree}\n")
                 else:
                     output_file.write(line)
             else:

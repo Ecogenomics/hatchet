@@ -63,7 +63,7 @@ class GenomeManager():
 
         return results
 
-    def pick_one_genome(self, tree, msa, taxonomy_file, domain, rank_of_interest, output_dir):
+    def pick_one_genome(self, tree, msa, taxonomy_file, domain,original_log, rank_of_interest, output_dir):
         """
 
         @param tree: str
@@ -74,10 +74,13 @@ class GenomeManager():
             Path GTDB Taxonomy file
         @param domain: str
             Path GTDB domain of interest
+        @param original_log: str
+            Path to original FastTree log file
         @param rank_of_interest: str
             rank of interest, Hatchet will pick one genome per taxa for each of this rank
         @param output_dir: str
             Path to output directory
+
         """
         self.logger.info(f"Picking one genome per {self.ranks_dict.get(rank_of_interest)}")
         selected_genomes = []
@@ -114,12 +117,12 @@ class GenomeManager():
 
         # a log file is created to matches the new MSA and pruned tree
         # This log file is requiered for pplacer
-        with open(os.path.join(output_dir, 'msa_file.fa'), 'rb', 0) as in_stream, open(os.path.join(output_dir, 'fitted_tree.tree'), 'wb', 0) as out_stream:
-            proc = subprocess.Popen(
-                ["FastTreeMP", "-nome", "-mllen", "-intree", os.path.join(output_dir, 'gtdb_pruned.tree'), '-log',
-                 os.path.join(output_dir, 'log_fitting.log')], stdin=in_stream, stdout=out_stream)
-            print("the commandline is {}".format(proc.args))
-            proc.communicate()
+        # with open(os.path.join(output_dir, 'msa_file.fa'), 'rb', 0) as in_stream, open(os.path.join(output_dir, 'fitted_tree.tree'), 'wb', 0) as out_stream:
+        #     proc = subprocess.Popen(
+        #         ["FastTreeMP", "-nome", "-mllen", "-intree", os.path.join(output_dir, 'gtdb_pruned.tree'), '-log',
+        #          os.path.join(output_dir, 'log_fitting.log')], stdin=in_stream, stdout=out_stream)
+        #     print("the commandline is {}".format(proc.args))
+        #     proc.communicate()
 
 
         # we redecorate the tree
@@ -140,18 +143,21 @@ class GenomeManager():
         unroot(decorated_tree, unrooted_tree)
         unroot(os.path.join(output_dir, 'gtdb_pruned.tree'), unrooted_undecorated_tree)
 
-        # This is a step when we modify the log fitting file from pplacer
+
+
+        # We are using the original log file from FastTree and use it in the pplacer package.
+        # the is no fitting of the tree in the pplacer package
         # We want to keep all information from the log but we do not want to rescale the branches
         # So the idea is to replace the latest iteration from the fitting step with the original tree
-        merge_logs(os.path.join(output_dir, 'log_fitting.log'),
+        merge_logs(original_log,
                    unrooted_undecorated_tree,
-                   os.path.join(output_dir, "log_fitting_merged.log"))
+                   os.path.join(output_dir, "original_merged_backbone.log"))
 
         # create pplacer package
-        subprocess.run(["taxit","create","-l",os.path.join(output_dir,'gtdbtk_package_high_level'),
-                       "-P",os.path.join(output_dir,'gtdbtk_package_high_level'),
+        subprocess.run(["taxit","create","-l",os.path.join(output_dir,'gtdbtk_package_backbone.refpkg'),
+                       "-P",os.path.join(output_dir,'gtdbtk_package_backbone.refpkg'),
                         "--aln-fasta",os.path.join(output_dir, 'msa_file.fa'),
-                        "--tree-stats",os.path.join(output_dir, 'log_fitting_merged.log'),
+                        "--tree-stats",os.path.join(original_log),
                         "--tree-file",unrooted_tree])
 
 

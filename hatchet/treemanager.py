@@ -130,7 +130,7 @@ class TreeManager():
             largest_clade_index += 1
         return list_gids, list_ranks, largest_clade_index
 
-    def split_tree(self, outdir):
+    def split_tree(self,original_log, outdir):
 
         make_sure_path_exists(outdir)
         mapping_file = open(os.path.join(outdir, 'tree_mapping.tsv'), 'w')
@@ -169,7 +169,7 @@ class TreeManager():
             ) or nd not in processed_nodes
 
             # Add clade_index
-            self.process_tree(processed_nodes,
+            self.process_tree(processed_nodes,original_log,
                               tree_index, outdir, mapping_file)
             tree_index += 1
 
@@ -181,7 +181,7 @@ class TreeManager():
         # Add clade_index
         print("size of last tree:{}\n".format(len(tree.leaf_nodes())))
 
-        self.process_tree(processed_nodes,
+        self.process_tree(processed_nodes,original_log,
                           tree_index, outdir, mapping_file)
 
 
@@ -195,7 +195,7 @@ class TreeManager():
         self.logger.info(f'Remaining Phylum = {len(results)}, Phylum in Tree {len(set_phylum_in_tree)} {set_phylum_in_tree}')
         return results
 
-    def process_tree(self, processed_nodes, clade_index, outdir, mapping_file):
+    def process_tree(self, processed_nodes,original_log, clade_index, outdir, mapping_file):
 
         list_genomes = [
             nd.taxon.label for nd in processed_nodes if nd.is_leaf()]
@@ -274,8 +274,8 @@ class TreeManager():
         stripped_tree_file = os.path.join(outdir,'{}_reference.stripped.tree'.format(clade_index))
         decorated_tree_file = os.path.join(outdir,'{}_reference.decorated.tree'.format(clade_index))
 
-        log_fitting_file = os.path.join(outdir,'log_fitting.{}.log'.format(clade_index))
-        log_fitting_merged_file = os.path.join(outdir,'log_fitting_merged.{}.log'.format(clade_index))
+        #log_fitting_file = os.path.join(outdir,'log_fitting.{}.log'.format(clade_index))
+        log_fitting_merged_file = os.path.join(outdir,'original_merged.{}.log'.format(clade_index))
 
 
         # We strip the taxonomy from the tree
@@ -284,18 +284,13 @@ class TreeManager():
 
         # a log file is created to matches the new MSA and pruned tree
         # This log file is requiered for pplacer
-        with open(aln_file, 'rb', 0) as in_stream, open(fitted_tree_file, 'wb', 0) as out_stream:
-            proc = subprocess.Popen(
-                ["FastTreeMP", "-nome", "-mllen", "-intree", stripped_tree_file, '-log',log_fitting_file], stdin=in_stream, stdout=out_stream)
-            print("the commandline is {}".format(proc.args))
-            proc.communicate()
+        # with open(aln_file, 'rb', 0) as in_stream, open(fitted_tree_file, 'wb', 0) as out_stream:
+        #     proc = subprocess.Popen(
+        #         ["FastTreeMP", "-nome", "-mllen", "-intree", stripped_tree_file, '-log',log_fitting_file], stdin=in_stream, stdout=out_stream)
+        #     print("the commandline is {}".format(proc.args))
+        #     proc.communicate()
 
-        # This is a step when we modify the log fitting file from pplacer
-        # We want to keep all information from the log but we do not want to rescale the branches
-        # So the idea is to replace the latest iteration from the fitting step with the original tree
-        merge_logs(log_fitting_file,
-                   stripped_tree_file,
-                   log_fitting_merged_file)
+
 
         subprocess.run(["genometreetk","outgroup",stripped_tree_file,
                         self.taxonomy,species_out,rooted_tree_file])
@@ -322,15 +317,15 @@ class TreeManager():
         # This is a step when we modify the log fitting file from pplacer
         # We want to keep all information from the log but we do not want to rescale the branches
         # So the idea is to replace the latest iteration from the fitting step with the original tree
-        merge_logs(log_fitting_file,
-                   stripped_tree_file,
-                   log_fitting_merged_file)
+        # merge_logs(original_log,
+        #            unrooted_undecorated_tree,
+        #            log_fitting_merged_file)
 
         # create pplacer package
         subprocess.run(["taxit","create","-l",package_name,
                        "-P",package_name,
                         "--aln-fasta",aln_file,
-                        "--tree-stats",log_fitting_merged_file,
+                        "--tree-stats",original_log,
                         "--tree-file",unrooted_tree])
 
 

@@ -48,55 +48,9 @@ from tqdm import tqdm
 class Tester(object):
     def __init__(self):
         self.rank_order = ['d', 'p', 'c', 'o', 'f', 'g', 's']
-        self.sample_size = 75
-        self.processed_ranks = ['p__T1SED10-198M','p__B130-G9','p__Nitrospinota_B','p__RUG730','p__ARS69',
-                                'p__Deferribacterota','p__Latescibacterota','p__Zixibacteria','p__Marinisomatota',
-                                'p__Dictyoglomota']
+        self.sample_size = 100
 
-        self.processed_ranks.extend(['c__Chthonomonadetes','c__SBBH01','c__SURF-8','c__B3-B38','c__RBG-13-61-14',
-                                     'c__Synergistia','c__UBA6624','c__DTU065','c__Desulfarculia','c__Coriobacteriia',
-                                     'c__B3-LCP','c__Chlamydiia','c__MVCY01','c__Thermotogae','c__Binatia','c__Dictyoglomia',
-                                     'c__Negativicutes','c__UBA8468','c__Brevinematia','c__DTU030','c__RUG730','c__UBA994',
-                                     'c__Calescibacteriia','c__Marinamargulisbacteria','c__Thermoleophilia','c__4572-55',
-                                     'c__AABM5-125-24','c__Acidobacteriae','c__Aminicenantia','c__Bin61','c__Blastocatellia',
-                                     'c__RPQS01','c__SURF-5'])
-
-
-
-        self.processed_ranks.extend(['o__Sporichthyales','o__SZUA-146','o__2-02-FULL-50-16','o__GCA-2747255',
-                                     'o__DTU087','o__UBA1135','o__RF32','o__Paenibacillales','o__Synechococcales',
-                                     'o__Mycobacteriales','o__FEN-1388_many'])
-
-        self.processed_ranks.extend(['o__Bac17_many', 'o__Cryosericales_many', 'o__Izemoplasmatales_many', 'o__Propionisporales_many',
-         'o__Thiotrichales_many', 'o__UBA2968_many', 'o__UBA9042_many', 'o__C00003060_many', 'o__FEN-1388_many',
-         'o__Piscirickettsiales_many', 'o__Sedimentisphaerales_many', 'o__UBA2242_many', 'o__UBA5794_many',
-         'o__UTPRO1_many'])
-
-        self.processed_ranks.extend(['o__Bac17_many', 'o__FEN-1388_many', 'o__Propionisporales_many', 'o__UBA2242_many', 'o__UTPRO1_many',
-         'o__C00003060_many', 'o__Izemoplasmatales_many', 'o__Sedimentisphaerales_many', 'o__UBA2968_many',
-         'o__Cryosericales_many', 'o__Piscirickettsiales_many', 'o__Thiotrichales_many', 'o__UBA5794_many'])
-
-        self.processed_ranks.extend(['p__Cyanobacteria','p__Nitrospinota_B','p__Deferribacterota','p__NPL-UPA2','p__Desulfobacterota_D',
-                                     'p__Proteobacteria','p__Dictyoglomota','p__RUG730','p__FEN-1099','p__SAR324','p__Fibrobacterota',
-                                     'p__T1SED10-198M','p__4572-55','p__Firmicutes_F','p__TA06','p__Aerophobota','p__Fusobacteriota',
-                                     'p__UBP15','p__ARS69','p__Latescibacterota','p__Zixibacteria','p__B130-G9','p__Marinisomatota',
-                                     'p__Caldisericota','p__Myxococcota'])
-
-        self.processed_ranks.extend(['o__2-02-FULL-50-16', 'o__Bac17', 'o__C00003060', 'o__CACIAM-69d', 'o__Cryosericales', 'o__DTU087',
-         'o__FEN-1388', 'o__GCA-2747255', 'o__Izemoplasmatales', 'o__Mycobacteriales', 'o__Paenibacillales',
-         'o__Piscirickettsiales', 'o__Propionisporales', 'o__RF32', 'o__Sedimentisphaerales', 'o__Sporichthyales',
-         'o__Synechococcales', 'o__SZUA-146', 'o__Thiotrichales', 'o__UBA1135', 'o__UBA2199', 'o__UBA2242',
-         'o__UBA2968', 'o__UBA5794', 'o__UTPRO1'])
-
-        self.processed_ranks.extend(['f__4484-213', 'f__AcAMD-5', 'f__Chthoniobacteraceae', 'f__Ectothiorhodospiraceae', 'f__Eggerthellaceae',
-         'f__Kyrpidiaceae', 'f__LD1', 'f__Obscuribacteraceae', 'f__Salinivirgaceae', 'f__SCGC-AAA003-L08', 'f__SG8-11',
-         'f__SKZP01', 'f__SZUA-8', 'f__TC1', 'f__TMED131', 'f__UBA1149', 'f__UBA1212', 'f__UBA2193', 'f__UBA2242',
-         'f__UBA3054', 'f__UBA3505', 'f__UBA5859', 'f__UBA6191', 'f__UBA7430', 'f__XYD1-FULL-40-9'])
-
-        self.processed_ranks.extend(['g__32-111', 'g__Alicyclobacillus_G', 'g__Arcicella', 'g__ARS1224', 'g__Brachymonas', 'g__CAADGG01',
-         'g__Chitinivorax', 'g__DTU052', 'g__Glycomyces', 'g__Haemophilus_A', 'g__Henriciella', 'g__Natronincola',
-         'g__Pontivivens', 'g__Synechococcus_E', 'g__SZUA-24', 'g__SZUA-33', 'g__UASB124', 'g__UBA10009', 'g__UBA10329',
-         'g__UBA11398', 'g__UBA1217', 'g__UBA2466', 'g__UBA2593', 'g__UBA4656', 'g__UBA7236'])
+        self.processed_ranks = []
 
 
     def regenerate_red_values(self, raw_tree, pruned_trees, red_file, output):
@@ -219,7 +173,7 @@ class Tester(object):
             make_sure_path_exists(genome_folder_to_analyse)
             batchfile = open(os.path.join(genome_folder_to_analyse,'batchfile.tsv'),'w')
 
-            untrimmed_msa_dict = read_fasta(os.path.join(original_tk_folder,'msa','gtdb_r95_bac120.faa'))
+            untrimmed_msa_dict = read_fasta(os.path.join(original_tk_folder,'msa','gtdb_r207_bac120.faa'))
             untrimmed_msa_file = open(os.path.join(outdir, 'untrimmed_msa.faa'), 'w')
 
 
@@ -228,6 +182,8 @@ class Tester(object):
                 for line in gpfile:
                     infos = line.strip().split(' ')
                     genome_folder_pathfile[infos[0].replace('_genomic.fna.gz','')] = infos[1]
+
+            original_log_file = os.path.join(original_tk_folder,'pplacer','gtdb_r207_bac120.refpkg','gtdb_r207_bac120_fasttree.log')
 
 
 
@@ -282,34 +238,35 @@ class Tester(object):
 
             mrca_red_package=os.path.join(tk_package, 'mrca_red')
             make_sure_path_exists(mrca_red_package)
-            self.symlink(os.path.join(original_tk_folder,'mrca_red','gtdbtk_r95_ar122.tsv'),os.path.join(tk_package,'mrca_red','gtdbtk_r95_ar122.tsv'),True)
-            regenerate_red_values(ref_tree,decorated_tree,red_file,os.path.join(mrca_red_package,'gtdbtk_r95_bac120.tsv'))
+            self.symlink(os.path.join(original_tk_folder,'mrca_red','gtdbtk_r207_ar53.tsv'),os.path.join(tk_package,'mrca_red','gtdbtk_r207_ar53.tsv'),True)
+            self.regenerate_red_values(ref_tree,decorated_tree,red_file,os.path.join(mrca_red_package,'gtdbtk_r207_bac120.tsv'))
 
             msa_package=os.path.join(tk_package, 'msa')
             make_sure_path_exists(msa_package)
-            self.symlink(os.path.join(original_tk_folder,'msa','gtdb_r95_ar122.faa'),os.path.join(tk_package,'msa','gtdb_r95_ar122.faa'),True)
-            shutil.copy(os.path.join(outdir, 'untrimmed_msa.faa'),os.path.join(msa_package,'gtdb_r95_bac120.faa'))
+            self.symlink(os.path.join(original_tk_folder,'msa','gtdb_r207_ar53.faa'),os.path.join(tk_package,'msa','gtdb_r207_ar53.faa'),True)
+            shutil.copy(os.path.join(outdir, 'untrimmed_msa.faa'),os.path.join(msa_package,'gtdb_r207_bac120.faa'))
 
             pplacer_package=os.path.join(tk_package, 'pplacer')
             make_sure_path_exists(pplacer_package)
-            self.symlink(os.path.join(original_tk_folder,'pplacer','gtdb_r95_ar122.refpkg'),os.path.join(tk_package,'pplacer','gtdb_r95_ar122.refpkg'),True)
+            self.symlink(os.path.join(original_tk_folder,'pplacer','gtdb_r207_ar53.refpkg'),os.path.join(tk_package,'pplacer','gtdb_r207_ar53.refpkg'),True)
 
 
-            with open(os.path.join(outdir,'msa_file.fna'), 'rb', 0) as in_stream, open(
-                    os.path.join(no_split_pplacer_package, 'fitted_tree.tree'), 'wb', 0) as out_stream:
-                proc = subprocess.Popen(
-                    ["FastTreeMP", "-nome", "-mllen", "-intree", os.path.join(outdir, 'gtdb_pruned.tree'), '-log',
-                     os.path.join(no_split_pplacer_package, 'log_fitting.log')], stdin=in_stream, stdout=out_stream)
-                print("the commandline is {}".format(proc.args))
-                proc.communicate()
+            # with open(os.path.join(outdir,'msa_file.fna'), 'rb', 0) as in_stream, open(
+            #         os.path.join(no_split_pplacer_package, 'fitted_tree.tree'), 'wb', 0) as out_stream:
+            #     proc = subprocess.Popen(
+            #         ["FastTreeMP", "-nome", "-mllen", "-intree", os.path.join(outdir, 'gtdb_pruned.tree'), '-log',
+            #          os.path.join(no_split_pplacer_package, 'log_fitting.log')], stdin=in_stream, stdout=out_stream)
+            #     print("the commandline is {}".format(proc.args))
+            #     proc.communicate()
 
-            merge_logs(os.path.join(no_split_pplacer_package, 'log_fitting.log'),
-                       os.path.join(outdir, "gtdb_pruned.tree"),
-                       os.path.join(no_split_pplacer_package, "log_fitting_merged.log"))
+            # merge_logs(os.path.join(no_split_pplacer_package, 'log_fitting.log'),
+            #            os.path.join(outdir, "gtdb_pruned.tree"),
+            #            os.path.join(no_split_pplacer_package, "log_fitting_merged.log"))
 
             decorated_tree = os.path.join(no_split_pplacer_package, 'decorated_tree.tree')
             subprocess.run(["phylorank", "decorate", os.path.join(outdir, 'gtdb_pruned.tree'),
                             os.path.join(outdir,'sub_taxonomy.tsv'), decorated_tree, "--skip_rd_refine"])
+            print("Decoration complete")
 
             # first get all lines from file
             with open(decorated_tree, 'r') as f:
@@ -323,19 +280,22 @@ class Tester(object):
                 f.writelines(lines)
 
             # create pplacer package
-            subprocess.run(["taxit", "create", "-l", os.path.join(pplacer_package, 'gtdb_r95_bac120.refpkg'),
-                            "-P", os.path.join(pplacer_package, 'gtdb_r95_bac120.refpkg'),
+            print("Creating pplacer package")
+            subprocess.run(["taxit", "create", "-l", os.path.join(pplacer_package, 'gtdb_r207_bac120.refpkg'),
+                            "-P", os.path.join(pplacer_package, 'gtdb_r207_bac120.refpkg'),
                             "--aln-fasta", os.path.join(outdir,'msa_file.fna'),
-                            "--tree-stats", os.path.join(no_split_pplacer_package, "log_fitting_merged.log"),
+                            "--tree-stats", original_log_file,
                             "--tree-file", decorated_tree])
+            print("Pplacer package created")
 
-
+            print("Running Hatchet")
             subprocess.run(["/srv/home/uqpchaum/development/hatchet/bin/hatchet", "hatchet_wf","-d","bac",
                             "--ref_tree",os.path.join(outdir, 'decorated_tree.tree'),
                             "--msa",os.path.join(outdir,'msa_file.fna'),
                             '--tax',os.path.join(outdir,'sub_taxonomy.tsv'),
                             '-o', os.path.join(outdir,'tk_package','generate_split_tk_package'),
-                            '--red_file',os.path.join(outdir, 'red_file.tsv')])
+                            '--red_file',os.path.join(outdir, 'red_file.tsv'),
+                            '--original_log',original_log_file])
 
             #we generate the package
 

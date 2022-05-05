@@ -217,6 +217,7 @@ class GenomeManager():
             if reffile.endswith("_reference.tree"):
                 output_file = os.path.join(split_tree_dir, 'red_value_'+reffile.replace('_reference.tree','.tsv'))
                 reffile= os.path.join(split_tree_dir, reffile)
+                self.logger.info("Regenerating RED values for {}".format(reffile))
                 self.regenerate_red_values(raw_tree, reffile, red_file, output_file)
 
     def _write_rd(self, pruned_tree, output_rd_file, unpruned_tree):

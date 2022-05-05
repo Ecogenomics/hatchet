@@ -304,8 +304,8 @@ class TreeManager():
         remove_character(decorated_tree_file,' ')
 
         #we unroot the tree
-        unrooted_tree = os.path.join(outdir, 'decorated_unrooted_tree.tree')
-        unrooted_undecorated_tree = os.path.join(outdir, 'nondecorated_unrooted_tree.tree')
+        unrooted_tree = os.path.join(outdir, '{}_decorated_unrooted_tree.tree'.format(clade_index))
+        unrooted_undecorated_tree = os.path.join(outdir, '{}_nondecorated_unrooted_tree.tree'.format(clade_index))
         if os.path.exists(unrooted_tree):
             os.remove(unrooted_tree)
         if os.path.exists(unrooted_undecorated_tree):

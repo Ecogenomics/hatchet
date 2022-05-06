@@ -29,6 +29,7 @@ from collections import defaultdict, Counter
 
 from hatchet.biolib_lite.common import make_sure_path_exists
 from hatchet.biolib_lite.seq_io import read_fasta
+from hatchet.common import selectbestgenomesets
 from hatchet.tools import merge_logs, remove_character, unroot
 
 
@@ -40,15 +41,15 @@ class TreeManager():
         self.tree = tree
         self.taxonomy = os.path.abspath(taxonomy)
         self.taxonomy_dict = {}
-        self.phylum_dict = self.populate_phylum_dict()
+        #self.phylum_dict = self.populate_phylum_dict()
         self.rank = rank
         self.msa_file = msa_file
         self.msa = read_fasta(msa_file)
         self.rank_order = ['d', 'p', 'c', 'o', 'f', 'g', 's']
         # we will need to select one genome from each subrank so we pick the
         # index of the subrank
-        self.rank_order_index = self.rank_order.index(rank)
-        self.rank_family_index = self.rank_order.index(rank) + 1
+        self.rank_class_index = self.rank_order.index('c')
+        self.rank_family_index = self.rank_order.index('f')
 
 
         self.domain = 'd__Bacteria'
@@ -94,15 +95,15 @@ class TreeManager():
 
     def calculate_maximum_tree_size(self):
         """
-            Count how many orders are in the tree
-            This number represent the size of the order level tree , i.e. backbone tree
+            Count how many classes are in the tree
+            This number represent the size of the classes level tree , i.e. backbone tree
 
 
         @return: int
             Return the size of the backbone tree
         """
         rank_list = []
-        order_list = []
+        class_list = []
         with open(self.taxonomy) as taxf:
             for line in taxf:
                 genome, taxonomy = line.strip().split('\t')
@@ -111,14 +112,14 @@ class TreeManager():
                 ranks = taxonomy.split(';')
                 if ranks[0] == self.domain:
                     rank_list.append(ranks[self.rank_family_index])
-                    order_list.append(ranks[self.rank_order_index])
+                    class_list.append(ranks[self.rank_class_index])
 
-        most_common_order,len_order = Counter(order_list).most_common(1)[0]
+        most_common_class,len_class = Counter(class_list).most_common(1)[0]
 
 
-        print(most_common_order, len_order)
+        print(most_common_class, len_class)
 
-        return max(len(set(rank_list)),len_order)
+        return max(len(set(rank_list)),len_class)
 
     def combine_clades(self, largest_clade_leaves, ordered_largest_clade, largest_clade_index, rank_dict_gid):
         list_gids = []
@@ -130,7 +131,7 @@ class TreeManager():
             largest_clade_index += 1
         return list_gids, list_ranks, largest_clade_index
 
-    def split_tree(self,original_log, outdir):
+    def split_tree(self,metadata,original_log, outdir):
 
         make_sure_path_exists(outdir)
         mapping_file = open(os.path.join(outdir, 'tree_mapping.tsv'), 'w')
@@ -140,6 +141,9 @@ class TreeManager():
                                            schema='newick',
                                            rooting='force-rooted',
                                            preserve_underscores=True)
+
+        # we need to pick the best genomes for each phylum
+        best_genome_per_phylum = selectbestgenomesets(metadata,self.domain,self.msa_file,'p',outdir)
 
         processed_nodes = []
         tree_index = 1
@@ -170,7 +174,7 @@ class TreeManager():
 
             # Add clade_index
             self.process_tree(processed_nodes,original_log,
-                              tree_index, outdir, mapping_file)
+                              tree_index,best_genome_per_phylum, outdir, mapping_file)
             tree_index += 1
 
             tree = tree.extract_tree(
@@ -182,20 +186,20 @@ class TreeManager():
         print("size of last tree:{}\n".format(len(tree.leaf_nodes())))
 
         self.process_tree(processed_nodes,original_log,
-                          tree_index, outdir, mapping_file)
+                          tree_index,best_genome_per_phylum, outdir, mapping_file)
 
 
-    def select_remaining_phylum(self, set_phylum_in_tree):
+    def select_remaining_phylum(self, set_phylum_in_tree,best_genome_per_phylum):
         results = {}
         random.seed(2)
-        for k,v in self.phylum_dict.items():
+        for k,v in best_genome_per_phylum.items():
             if k in set_phylum_in_tree:
                 continue
-            results[random.choice(v)] = len(v)
+            results[v.get('sel_rid')] = v.get('cluster_size')
         self.logger.info(f'Remaining Phylum = {len(results)}, Phylum in Tree {len(set_phylum_in_tree)} {set_phylum_in_tree}')
         return results
 
-    def process_tree(self, processed_nodes,original_log, clade_index, outdir, mapping_file):
+    def process_tree(self, processed_nodes,original_log, clade_index,best_genome_per_phylum, outdir, mapping_file):
 
         list_genomes = [
             nd.taxon.label for nd in processed_nodes if nd.is_leaf()]
@@ -211,7 +215,7 @@ class TreeManager():
             mapping_file.write('{}\t{}\n'.format(rk_in_tree, clade_index))
 
         # Pick one genome for each Phylum not present in the process nodes
-        external_phylum_genomes = self.select_remaining_phylum(set_phylum_in_tree)
+        external_phylum_genomes = self.select_remaining_phylum(set_phylum_in_tree,best_genome_per_phylum)
 
         outgroup_id, species_out = self.select_outgroup(external_phylum_genomes)
         self.logger.info('Tree {} outgroup on {} ({})'.format(

@@ -34,7 +34,8 @@ class OptionsParser():
     def pick_genomes(self, options):
         make_sure_path_exists(options.out_dir)
         p = GenomeManager()
-        p.pick_one_genome(options.ref_tree, options.msa, options.tax,
+        p.pick_one_genome(options.ref_tree,options.metadata,
+                          options.msa, options.tax,
                           options.domain,options.original_log,
                           options.rank_of_interest, options.out_dir)
 
@@ -53,7 +54,7 @@ class OptionsParser():
         p = TreeManager(options.ref_tree, options.tax,
                         options.rank_to_split, options.msa, options.domain)
         make_sure_path_exists(options.out_dir)
-        p.split_tree(options.out_dir)
+        p.split_tree(options.metadata,options.original_log,options.out_dir)
 
     def merge_logs(self, options):
         merge_logs(options.input_log,options.pruned_tree,options.output_log)
@@ -68,7 +69,7 @@ class OptionsParser():
         make_sure_path_exists(high_level_directory)
         g = GenomeManager()
         self.logger.info('High level genome picking....')
-        g.pick_one_genome(options.ref_tree, options.msa, options.tax,
+        g.pick_one_genome(options.ref_tree,options.metadata, options.msa, options.tax,
                           options.domain,options.original_log,
                           options.rank_of_interest,  high_level_directory)
 
@@ -85,7 +86,7 @@ class OptionsParser():
         t = TreeManager(options.ref_tree, options.tax,
                         options.rank_to_split, options.msa, options.domain)
         make_sure_path_exists(spe_level_directory)
-        t.split_tree(options.original_log,spe_level_directory)
+        t.split_tree(options.metadata,options.original_log,spe_level_directory)
 
         g.regenerate_low_tree_red(spe_level_directory, options.ref_tree, options.red_file)
 

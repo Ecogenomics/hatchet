@@ -130,10 +130,15 @@ def __rank_of_interest(group,required):
                        default='f',
                        choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
 
+def __metadata_file(group,required):
+    group.add_argument('-m','--metadata',
+                       required=required,
+                       help='File with GTDB metadata.')
+
 def __rank_to_split(group,required):
     group.add_argument('-r', '--rank_to_split',
                        required=required,
-                       default='o',
+                       default='c',
                        help='Split Reference tree into lower ranks subtrees.',
                        choices=['d', 'p', 'c', 'o', 'f', 'g', 's'])
 
@@ -188,6 +193,7 @@ def get_main_parser():
     with subparser(sub_parsers, 'pick', 'Pick one genome for a specified rank.') as parser:
         with arg_group(parser, 'required named arguments') as grp:
             __domain(grp, required=True)
+            __metadata_file(grp, required=True)
             __rank_of_interest(grp,required=True)
             __ref_tree(grp,required=True)
             __ref_msa(grp,required=True)
@@ -209,10 +215,12 @@ def get_main_parser():
     with subparser(sub_parsers, 'split', 'Split Reference tree into lower ranks subtrees.') as parser:
         with arg_group(parser, 'required named arguments') as grp:
             __ref_tree(grp, required=True)
+            __metadata_file(grp, required=True)
             __ref_msa(grp, required=True)
             __taxonomy_file(grp, required=True)
             __domain(grp, required=True)
             __output_dir(grp, required=True)
+            __original_log(grp, required=True)
         with arg_group(parser, 'options arguments') as grp:
             __rank_to_split(grp, required=False)
             __silent(grp)
@@ -243,6 +251,7 @@ def get_main_parser():
     with subparser(sub_parsers, 'hatchet_wf', 'Run the full workflow , from pick to red_low.') as parser:
         with arg_group(parser, 'required named arguments') as grp:
             __domain(grp, required=True)
+            __metadata_file(grp, required=True)
             __ref_tree(grp,required=True)
             __ref_msa(grp,required=True)
             __taxonomy_file(grp, required=True)
@@ -290,8 +299,8 @@ def main():
 
         except:
             try:
-                make_sure_path_exists(args.out_file)
-                logger_setup(os.path.dirname(args.out_file),
+                dirname = os.path.dirname(args.out_file)
+                logger_setup(dirname,
                             'hatchet.log',
                              'Hatchet',
                              __version__,

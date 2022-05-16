@@ -18,13 +18,16 @@
 import os
 import logging
 import random
+import shutil
 import sys
 
 import dendropy
 import subprocess
 
 
-from hatchet.biolib_lite.seq_io import read_fasta
+from hatchet.biolib_lite.seq_io import read_fasta, read_seq
+from hatchet.common import selectbestgenomesets
+
 from hatchet.tools import merge_logs, prune, remove_character,unroot
 
 random.seed(10)
@@ -63,7 +66,7 @@ class GenomeManager():
 
         return results
 
-    def pick_one_genome(self, tree, msa, taxonomy_file, domain,original_log, rank_of_interest, output_dir):
+    def pick_one_genome(self, tree,metadata, msa, taxonomy_file, domain,original_log, rank_of_interest, output_dir):
         """
 
         @param tree: str
@@ -82,20 +85,19 @@ class GenomeManager():
             Path to output directory
 
         """
-        self.logger.info(f"Picking one genome per {self.ranks_dict.get(rank_of_interest)}")
-        selected_genomes = []
+
+        # find the best set of genomes for a specific rank
 
         if domain == 'bac':
-            dom_dict = self.parse_taxonomy_file(
-                taxonomy_file, 'd__Bacteria', rank_of_interest)
+            full_domain = 'd__Bacteria'
         else:
-            dom_dict = self.parse_taxonomy_file(
-                taxonomy_file, 'd__Archaea', rank_of_interest)
+            full_domain = 'd__Archaea'
+
+        selected_genomes_dict = selectbestgenomesets(metadata,full_domain,msa,rank_of_interest,output_dir)
+        selected_genomes = [v.get('sel_rid') for k,v in selected_genomes_dict.items()]
 
 
-        # We pick randomly one genome per family
-        for k, v in dom_dict.items():
-            selected_genomes.append(random.choice(v))
+        self.logger.info(f"Picking one genome per {self.ranks_dict.get(rank_of_interest)}")
 
         msa_dict = read_fasta(msa)
 
@@ -152,6 +154,15 @@ class GenomeManager():
         merge_logs(original_log,
                    unrooted_undecorated_tree,
                    os.path.join(output_dir, "original_merged_backbone.log"))
+
+        if os.path.exists(os.path.join(output_dir,'gtdbtk_package_backbone.refpkg')):
+            print(" refpkg already exists, do you want to overwrite it? (y/n)")
+            answer = input()
+            if answer == 'y':
+                shutil.rmtree(os.path.join(output_dir,'gtdbtk_package_backbone.refpkg'))
+            else:
+                print("exiting")
+                sys.exit(0)
 
         # create pplacer package
         subprocess.run(["taxit","create","-l",os.path.join(output_dir,'gtdbtk_package_backbone.refpkg'),
@@ -237,3 +248,4 @@ class GenomeManager():
                            (taxa[0].taxon.label, taxa[-1].taxon.label, reldist_node.rel_dist))
 
         fout.close()
+

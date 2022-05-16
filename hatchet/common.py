@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 
 from hatchet.biolib_lite.seq_io import read_fasta, read_seq
 from hatchet.biolib_lite.common import make_sure_path_exists
@@ -213,3 +214,44 @@ def selectbestgenomesets(metadata_file, domain, msa, rank_of_interest, output_di
     fout.close()
 
     return selected_genomes
+
+
+def package_results(high_level_directory, backbone_red_value_file, class_level_directory, to_copy_directory):
+
+    #Create backbone folder
+    backbone_folder = os.path.join(to_copy_directory, 'backbone')
+    backbone_folder_pplacer = os.path.join(backbone_folder, 'pplacer')
+    backbone_folder_red = os.path.join(backbone_folder, 'red')
+    make_sure_path_exists(backbone_folder)
+    make_sure_path_exists(backbone_folder_pplacer)
+    make_sure_path_exists(backbone_folder_red)
+
+    #move backbone red value file to backbone folder
+    shutil.move(backbone_red_value_file, backbone_folder_red)
+    # move backbone pplacer package to backbone folder
+    shutil.move(os.path.join(high_level_directory,'gtdbtk_package_backbone.refpkg'), backbone_folder_pplacer)
+
+    #create class_level folder
+    class_folder = os.path.join(to_copy_directory, 'class_level')
+    class_folder_pplacer = os.path.join(class_folder, 'pplacer')
+    class_folder_red = os.path.join(class_folder, 'red')
+    make_sure_path_exists(class_folder)
+    make_sure_path_exists(class_folder_pplacer)
+    make_sure_path_exists(class_folder_red)
+
+    for reffile in os.listdir(class_level_directory):
+        if reffile.startswith("red_value_"):
+            shutil.move(os.path.join(class_level_directory, reffile), class_folder_red)
+        elif reffile.endswith(".refpkg"):
+            shutil.move(os.path.join(class_level_directory, reffile), class_folder_pplacer)
+        elif reffile.endswith("tree_mapping.tsv"):
+            shutil.move(os.path.join(class_level_directory, reffile), class_folder)
+
+    #move class level red values file to class level folder
+
+
+
+
+
+
+

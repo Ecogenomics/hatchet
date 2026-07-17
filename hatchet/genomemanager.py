@@ -171,56 +171,109 @@ class GenomeManager():
                         "--tree-stats",os.path.join(original_log),
                         "--tree-file",unrooted_tree])
 
-
     def regenerate_red_values(self, raw_tree, pruned_tree_path, red_file, output):
-        """
+        # 1. Use a single TaxonNamespace. This is crucial for bitmasking speed.
+        tns = dendropy.TaxonNamespace()
+    
+        unpruned_tree = dendropy.Tree.get_from_path(
+        raw_tree,
+        schema='newick',
+        rooting='force-rooted',
+        preserve_underscores=True,
+        taxon_namespace=tns  # <--- Added
+        )
 
-        @param raw_tree: str
-            Path to GTDB reference tree
-        @param pruned_tree_path: str
-            Path to the new pruned tree
-        @param red_file: str
-            Path to GTDB reference RED file
-        @param output:
-            Path to the output file
-        @return:
-        """
+        # 2. THIS IS THE MAGIC LINE. 
+        # It pre-calculates bitmasks so mrca() becomes O(1) or O(log N) instead of O(N).
+        unpruned_tree.update_bipartitions()
 
-        unpruned_tree = dendropy.Tree.get_from_path(raw_tree,
-                                                    schema='newick',
-                                                    rooting='force-rooted',
-                                                    preserve_underscores=True)
+        # Create map from leave labels to tree nodes
+        leaf_node_map = {leaf.taxon.label: leaf for leaf in unpruned_tree.leaf_node_iter()}
 
-        # create map from leave labels to tree nodes
-        leaf_node_map = {}
-        for leaf in unpruned_tree.leaf_node_iter():
-            leaf_node_map[leaf.taxon.label] = leaf
-
-        # parse RED file and associate reference RED value to reference node in
-        # the tree
+        # parse RED file
         reference_nodes = set()
         with open(red_file) as rf:
             for line in rf:
-                label_ids, red_value = line.strip().split('\t')
+                # Added a simple check to skip potential empty lines or headers
+                row = line.strip().split('\t')
+                if len(row) < 2: continue
+                
+                label_ids, red_value = row
                 labels = label_ids.split('|')
 
-                if len(labels) == 2:
-                    if all(elem in leaf_node_map for elem in labels):
-                        taxa = [leaf_node_map[label].taxon for label in labels]
-                        node = unpruned_tree.mrca(taxa=taxa)
+                if all(elem in leaf_node_map for elem in labels):
+                    taxa = [leaf_node_map[label].taxon for label in labels]
+                
+                    # Because of update_bipartitions(), this call is now nearly instant
+                    node = unpruned_tree.mrca(taxa=taxa)
+                    if node:
                         node.rel_dist = float(red_value)
                         reference_nodes.add(node)
-                elif len(labels) == 1:
-                    if labels[0] in leaf_node_map:
-                        node = leaf_node_map[labels[0]]
-                        node.rel_dist = float(red_value)
-                        reference_nodes.add(node)
-        pruned_tree = dendropy.Tree.get_from_path(pruned_tree_path,
-                                                  schema='newick',
-                                                  rooting='force-rooted',
-                                                  preserve_underscores=True)
+
+        # 3. Load the pruned tree using the same namespace
+        pruned_tree = dendropy.Tree.get_from_path(
+            pruned_tree_path,
+            schema='newick',
+            rooting='force-rooted',
+            preserve_underscores=True,
+            taxon_namespace=tns  # <--- Use the same TNS here
+        )
 
         self._write_rd(pruned_tree, output, unpruned_tree)
+
+
+#    def regenerate_red_values(self, raw_tree, pruned_tree_path, red_file, output):
+#        """
+#
+#        @param raw_tree: str
+#            Path to GTDB reference tree
+#        @param pruned_tree_path: str
+#            Path to the new pruned tree
+#        @param red_file: str
+#            Path to GTDB reference RED file
+#        @param output:
+#            Path to the output file
+#        @return:
+#        """
+
+#        unpruned_tree = dendropy.Tree.get_from_path(raw_tree,
+#                                                    schema='newick',
+#                                                    rooting='force-rooted',
+#                                                    preserve_underscores=True)
+
+#        print("Update Bipartition")
+#        #unpruned_tree.update_bipartitions()
+
+#        # create map from leave labels to tree nodes
+#        leaf_node_map = {}
+#        for leaf in unpruned_tree.leaf_node_iter():
+#            leaf_node_map[leaf.taxon.label] = leaf
+
+#        # parse RED file and associate reference RED value to reference node in
+#        # the tree
+#        reference_nodes = set()
+#        with open(red_file) as rf:
+#            for line in rf:
+#                label_ids, red_value = line.strip().split('\t')
+#                labels = label_ids.split('|')
+#
+#                if len(labels) == 2:
+#                    if all(elem in leaf_node_map for elem in labels):
+#                        taxa = [leaf_node_map[label].taxon for label in labels]
+#                        node = unpruned_tree.mrca(taxa=taxa)
+#                        node.rel_dist = float(red_value)
+#                        reference_nodes.add(node)
+#                elif len(labels) == 1:
+#                    if labels[0] in leaf_node_map:
+#                        node = leaf_node_map[labels[0]]
+#                        node.rel_dist = float(red_value)
+#                        reference_nodes.add(node)
+#        pruned_tree = dendropy.Tree.get_from_path(pruned_tree_path,
+#                                                  schema='newick',
+#                                                  rooting='force-rooted',
+#                                                  preserve_underscores=True)
+
+#        self._write_rd(pruned_tree, output, unpruned_tree)
 
     def regenerate_low_tree_red(self, split_tree_dir, raw_tree, red_file):
         """ Regenerate the red file for each species level sub tree"""

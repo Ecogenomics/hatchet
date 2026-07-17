@@ -8,7 +8,7 @@
 #                                                                             #
 #    This program is distributed in the hope that it will be useful,          #
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of           #
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #r
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #
 #    GNU General Public License for more details.                             #
 #                                                                             #
 #    You should have received a copy of the GNU General Public License        #
@@ -26,7 +26,6 @@ __status__ = "Development"
 
 import os
 import sys
-import ntpath
 import logging
 import argparse
 
@@ -297,7 +296,8 @@ def main():
                          __version__,
                          silent)
 
-        except:
+
+        except Exception:
             try:
                 dirname = os.path.dirname(args.out_file)
                 logger_setup(dirname,
@@ -305,7 +305,7 @@ def main():
                              'Hatchet',
                              __version__,
                              silent)
-            except:
+            except Exception:
                 logger_setup('.',
                              'hatchet.log',
                              'Hatchet',
@@ -315,19 +315,10 @@ def main():
         # do what we came here to do
         try:
             parser = OptionsParser()
-            if False:
-                import cProfile
-
-                cProfile.run('parser.parse_options(args)', 'prof')
-            elif False:
-                import pdb
-
-                pdb.run(parser.parse_options(args))
-            else:
-                parser.parse_options(args)
+            parser.parse_options(args)
         except SystemExit:
             print("\n  Controlled exit resulting from an unrecoverable error or warning.")
-        except:
+        except Exception:
             print("\nUnexpected error:", sys.exc_info()[0])
             raise
 

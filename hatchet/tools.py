@@ -1,9 +1,12 @@
+import logging
 import subprocess
 
 import dendropy
 
 from hatchet.biolib_lite.common import check_file_exists
 from hatchet.biolib_lite.newick import parse_label
+
+logger = logging.getLogger('timestamp')
 
 
 def purge_reload(command, shell_command_file, cmd):
@@ -13,7 +16,8 @@ def purge_reload(command, shell_command_file, cmd):
 
 
 def merge_logs(log_fitting_in,non_fitted_tree,log_fitting_out):
-    print(log_fitting_in,non_fitted_tree,log_fitting_out)
+    logger.info("Merging log fitting file '%s': replacing its final ML tree with '%s' and writing to '%s'.",
+                log_fitting_in, non_fitted_tree, log_fitting_out)
     output_file = open(log_fitting_out, 'w')
     with open(non_fitted_tree, 'r') as fistripped:
         stripped_tree = fistripped.read().replace('\n', '')

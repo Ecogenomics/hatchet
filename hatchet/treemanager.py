@@ -18,8 +18,6 @@
 import os
 import subprocess
 import sys
-import csv
-import re
 import logging
 import random
 import dendropy
@@ -30,7 +28,7 @@ from collections import defaultdict, Counter
 from hatchet.biolib_lite.common import make_sure_path_exists
 from hatchet.biolib_lite.seq_io import read_fasta
 from hatchet.common import selectbestgenomesets
-from hatchet.tools import merge_logs, remove_character, unroot
+from hatchet.tools import remove_character, unroot
 
 
 class TreeManager():
@@ -41,7 +39,6 @@ class TreeManager():
         self.tree = tree
         self.taxonomy = os.path.abspath(taxonomy)
         self.taxonomy_dict = {}
-        #self.phylum_dict = self.populate_phylum_dict()
         self.rank = rank
         self.msa_file = msa_file
         self.msa = read_fasta(msa_file)
@@ -87,10 +84,10 @@ class TreeManager():
         with open(tf) as filein:
             for line in filein:
                 infos = line.strip().split('\t')
-                order = infos[1].split(';')[roi]
+                order_tax = infos[1].split(';')[roi]
                 str_domain = infos[1].split(';')[0]
                 if str_domain == self.domain:
-                    results.setdefault(order, []).append(infos[0])
+                    results.setdefault(order_tax, []).append(infos[0])
         return results
 
     def calculate_maximum_tree_size(self):
@@ -114,12 +111,10 @@ class TreeManager():
                     rank_list.append(ranks[self.rank_family_index])
                     class_list.append(ranks[self.rank_class_index])
 
-        most_common_class,len_class = Counter(class_list).most_common(1)[0]
+        most_common_class, len_class = Counter(class_list).most_common(1)[0]
+        self.logger.debug(f'Largest class is {most_common_class} with {len_class} families')
 
-
-        print(most_common_class, len_class)
-
-        return max(len(set(rank_list)),len_class)
+        return max(len(set(rank_list)), len_class)
 
     def combine_clades(self, largest_clade_leaves, ordered_largest_clade, largest_clade_index, rank_dict_gid):
         list_gids = []
@@ -150,7 +145,7 @@ class TreeManager():
         while len(tree.leaf_nodes()) > size_maximum_tree * 1.1:
 
             dict_nodes = {}
-            print('Leaves in remaining Tree:{}.'.format(len(tree.leaf_nodes())))
+            self.logger.info(f'Leaves in remaining tree: {len(tree.leaf_nodes())}.')
             for nd in tree.levelorder_node_iter():
                 if nd.is_internal() and nd not in processed_nodes:
                     if nd.label is not None and self.rank + '__' in nd.label:
@@ -183,7 +178,7 @@ class TreeManager():
         processed_nodes = tree.leaf_nodes()
 
         # Add clade_index
-        print("size of last tree:{}\n".format(len(tree.leaf_nodes())))
+        self.logger.info(f"size of last tree:{len(tree.leaf_nodes())}")
 
         self.process_tree(processed_nodes,original_log,
                           tree_index,best_genome_per_phylum, outdir, mapping_file)
@@ -203,8 +198,6 @@ class TreeManager():
 
         list_genomes = [
             nd.taxon.label for nd in processed_nodes if nd.is_leaf()]
-        # print("Number of genomes: {},{}".format(
-        #     len(list_genomes), 2 * len(list_genomes)))
 
         set_rank_in_tree = set(
             [self.taxonomy_dict.get(gid).split(';')[self.rank_order.index(self.rank)] for gid in list_genomes])
@@ -285,17 +278,6 @@ class TreeManager():
         # We strip the taxonomy from the tree
         subprocess.run(["genometreetk", "strip", tree_file, stripped_tree_file])
 
-
-        # a log file is created to matches the new MSA and pruned tree
-        # This log file is requiered for pplacer
-        # with open(aln_file, 'rb', 0) as in_stream, open(fitted_tree_file, 'wb', 0) as out_stream:
-        #     proc = subprocess.Popen(
-        #         ["FastTreeMP", "-nome", "-mllen", "-intree", stripped_tree_file, '-log',log_fitting_file], stdin=in_stream, stdout=out_stream)
-        #     print("the commandline is {}".format(proc.args))
-        #     proc.communicate()
-
-
-
         subprocess.run(["genometreetk","outgroup",stripped_tree_file,
                         self.taxonomy,species_out,rooted_tree_file])
 
@@ -321,9 +303,7 @@ class TreeManager():
         # This is a step when we modify the log fitting file from pplacer
         # We want to keep all information from the log but we do not want to rescale the branches
         # So the idea is to replace the latest iteration from the fitting step with the original tree
-        # merge_logs(original_log,
-        #            unrooted_undecorated_tree,
-        #            log_fitting_merged_file)
+        # merge_logs(original_log,unrooted_undecorated_tree,log_fitting_merged_file)
 
         # create pplacer package
         subprocess.run(["taxit","create","-l",package_name,
@@ -333,7 +313,8 @@ class TreeManager():
                         "--tree-file",unrooted_tree])
 
 
-    def purge_reload(self, shell_command_file, cmd,conda_activate = None):
+    @staticmethod
+    def purge_reload(shell_command_file, cmd,conda_activate = None):
         if conda_activate is not None:
             shell_command_file.write(conda_activate)
         shell_command_file.write('{};'.format(cmd))
